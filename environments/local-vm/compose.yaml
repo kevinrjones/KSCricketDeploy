@@ -1,14 +1,21 @@
 # =============================================================================
 # Local VM Environment - Docker Compose
 # =============================================================================
-# Deploy to a local Linux VM for testing. Same structure as beta, but with
-# different hostnames and potentially self-signed certificates.
+# Same shape as beta. Secrets are file contents under private/local-vm/ mounted
+# at /run/secrets/<name>. ASP.NET apps (ids, adminui) load them via KeyPerFile.
+# ACS API overlays /run/secrets onto its config map. MariaDB uses *_PASSWORD_FILE.
+# Do NOT put secret file paths into app env vars as if they were the secret values.
 # =============================================================================
 
 name: acs-local-vm
 
 services:
   # ---- MariaDB ----
+  # MariaDB hosts multiple databases:
+  #   - identity: IdentityServer and AdminUI
+  #   - cricketarchive: ACS API
+  #   - cricket: additional cricket database
+  # The initialization script in ../../mariadb/init runs automatically on first volume startup.
   mariadb:
     image: ${MARIADB_IMAGE:-mariadb:11}
     restart: unless-stopped
@@ -16,11 +23,14 @@ services:
       MARIADB_ROOT_PASSWORD_FILE: /run/secrets/mariadb_root_password
       MARIADB_PASSWORD_FILE: /run/secrets/mariadb_password
       MARIADB_DATABASE: ${MARIADB_DATABASE:-identity}
-      MARIADB_USER: ${MARIADB_USER:-acs_user}
+      MARIADB_USER: ${MARIADB_USER:-identity}
     secrets:
       - mariadb_root_password
       - mariadb_password
+      - jdbc.username
+      - jdbc.password
     volumes:
+      - ../../mariadb/init:/docker-entrypoint-initdb.d:ro
       - vm-mariadb-data:/var/lib/mysql
     networks:
       - acs-net
@@ -31,28 +41,22 @@ services:
       retries: 12
       start_period: 30s
 
-  # ---- IdentityServer ----
+  # ---- IdentityServer (ids) ----
+  # Loads every file in /run/secrets as config (ConnectionStrings__identity → ConnectionStrings:identity).
   ids:
-    image: ${IDS_IMAGE:?Set IDS_IMAGE}
+    image: ${IDS_IMAGE:?Set IDS_IMAGE in environments/local-vm/.env}
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5000
       DOTNET_PRINT_TELEMETRY_MESSAGE: "false"
-      ConnectionStrings__identity: /run/secrets/ConnectionStrings__identity
-      ConnectionStrings__configuration: /run/secrets/ConnectionStrings__configuration
-      ConnectionStrings__persistedgrants: /run/secrets/ConnectionStrings__persistedgrants
-      DataProtection__Keys__ConnectionString: /run/secrets/DataProtection__Keys__ConnectionString
-      DataProtection__Keys__ProtectKeysWithCertificate: /run/secrets/DataProtection__Keys__ProtectKeysWithCertificate
-      Authentication__Google__ClientId: /run/secrets/Authentication__Google__ClientId
-      Authentication__Google__ClientSecret: /run/secrets/Authentication__Google__ClientSecret
+      # Non-secret public URL (must match nginx Host + OIDC issuer)
       PublicOrigin: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
+      # DP PFX path inside the container (file is volume-mounted; password is a secret file)
+      DataProtection__Certificate__Path: /run/certs/ids-mysql-dp.pfx
     secrets:
       - ConnectionStrings__identity
-      - ConnectionStrings__configuration
-      - ConnectionStrings__persistedgrants
-      - DataProtection__Keys__ConnectionString
-      - DataProtection__Keys__ProtectKeysWithCertificate
+      - DataProtection__Certificate__Password
       - Authentication__Google__ClientId
       - Authentication__Google__ClientSecret
     volumes:
@@ -68,27 +72,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 30s
+      start_period: 45s
 
   # ---- AdminUI ----
+  # KeyPerFile: secret *filenames* must be LicenseKey, AdminUIClientSecret, etc.
   adminui:
-    image: ${ADMINUI_IMAGE:?Set ADMINUI_IMAGE}
+    image: ${ADMINUI_IMAGE:?Set ADMINUI_IMAGE in environments/local-vm/.env}
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
-      LicenseKey: /run/secrets/AdminUI__LicenseKey
-      AdminUIClientSecret: /run/secrets/AdminUI__ClientSecret
-      UsernamePolicy__Secret: /run/secrets/AdminUI__UsernamePolicy__Secret
       UiUrl: https://${ADMINUI_HOSTNAME:-adminui-vm.knowledgespike.cricket}
       AuthorityUrl: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
-      IdentityConnectionString: /run/secrets/IdentityConnectionString
-      IdentityServerConnectionString: /run/secrets/IdentityServerConnectionString
       RequireHttpsMetadata: "true"
     secrets:
-      - AdminUI__LicenseKey
-      - AdminUI__ClientSecret
-      - AdminUI__UsernamePolicy__Secret
+      - LicenseKey
+      - AdminUIClientSecret
+      - UsernamePolicy__Secret
       - IdentityConnectionString
       - IdentityServerConnectionString
     volumes:
@@ -105,24 +105,24 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 30s
+      start_period: 45s
 
   # ---- ACS Web ----
+  # Reads OIDC_* from environment (not KeyPerFile). Client secret comes from .env.
   acs-web:
-    image: ${ACS_WEB_IMAGE:?Set ACS_WEB_IMAGE}
+    image: ${ACS_WEB_IMAGE:?Set ACS_WEB_IMAGE in environments/local-vm/.env}
     restart: unless-stopped
     environment:
       DEVELOPMENT: "false"
-      PORT: 5002
+      PORT: "5002"
       HOST: 0.0.0.0
       OIDC_AUTHORITY: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
-      OIDC_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/signin-oidc
-      OIDC_POST_LOGOUT_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/
-      ACS_API_BASE_URL: https://${ACS_API_HOSTNAME:-api-vm.knowledgespike.cricket}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-acsstats}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET in environments/local-vm/.env}
+      OIDC_REDIRECT_URI: https://${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/signin-oidc
+      OIDC_POST_LOGOUT_REDIRECT_URI: https://${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/
+      ACS_API_BASE_URL: https://${API_HOSTNAME:-api-vm.knowledgespike.cricket}
       KTOR_ENVIRONMENT: local-vm
-      IdentityServer__ClientSecret: /run/secrets/IdentityServer__ClientSecret
-    secrets:
-      - IdentityServer__ClientSecret
     volumes:
       - vm-acs-web-logs:/opt/app/logs
     networks:
@@ -138,19 +138,18 @@ services:
       start_period: 5s
 
   # ---- ACS API ----
+  # HOCON + env for URL/issuer; jdbc.username / jdbc.password files in /run/secrets override.
   acs-api:
-    image: ${ACS_API_IMAGE:?Set ACS_API_IMAGE}
+    image: ${ACS_API_IMAGE:?Set ACS_API_IMAGE in environments/local-vm/.env}
     restart: unless-stopped
     environment:
       DEVELOPMENT: "false"
-      PORT: 5004
+      PORT: "5004"
       HOST: 0.0.0.0
       JDBCURL: jdbc:mariadb://mariadb:3306/cricketarchive
       JWKSURL: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}/.well-known/openid-configuration/jwks
       ISSUER: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
-      CORS_ORIGINS: https://${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
-      jdbc.username: /run/secrets/jdbc.username
-      jdbc.password: /run/secrets/jdbc.password
+      CORS_ORIGINS: https://${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
     secrets:
       - jdbc.username
       - jdbc.password
@@ -180,8 +179,8 @@ services:
         aliases:
           - ${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
           - ${ADMINUI_HOSTNAME:-adminui-vm.knowledgespike.cricket}
-          - ${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
-          - ${ACS_API_HOSTNAME:-api-vm.knowledgespike.cricket}
+          - ${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
+          - ${API_HOSTNAME:-api-vm.knowledgespike.cricket}
     depends_on:
       ids:
         condition: service_healthy
@@ -210,44 +209,33 @@ volumes:
   vm-acs-api-logs:
     name: vm-acs-api-logs
 
+# Each secret file's *basename* is the name inside /run/secrets/
 secrets:
-  # MariaDB
   mariadb_root_password:
     file: ../../private/local-vm/mariadb_root_password
   mariadb_password:
     file: ../../private/local-vm/mariadb_password
 
-  # IdentityServer
   ConnectionStrings__identity:
     file: ../../private/local-vm/ConnectionStrings__identity
-  ConnectionStrings__configuration:
-    file: ../../private/local-vm/ConnectionStrings__configuration
-  ConnectionStrings__persistedgrants:
-    file: ../../private/local-vm/ConnectionStrings__persistedgrants
-  DataProtection__Keys__ConnectionString:
-    file: ../../private/local-vm/DataProtection__Keys__ConnectionString
-  DataProtection__Keys__ProtectKeysWithCertificate:
-    file: ../../private/local-vm/DataProtection__Keys__ProtectKeysWithCertificate
+  DataProtection__Certificate__Password:
+    file: ../../private/local-vm/DataProtection__Certificate__Password
   Authentication__Google__ClientId:
     file: ../../private/local-vm/Authentication__Google__ClientId
   Authentication__Google__ClientSecret:
     file: ../../private/local-vm/Authentication__Google__ClientSecret
 
-  # AdminUI
-  AdminUI__LicenseKey:
-    file: ../../private/local-vm/AdminUI__LicenseKey
-  AdminUI__ClientSecret:
-    file: ../../private/local-vm/AdminUI__ClientSecret
-  AdminUI__UsernamePolicy__Secret:
-    file: ../../private/local-vm/AdminUI__UsernamePolicy__Secret
+  LicenseKey:
+    file: ../../private/local-vm/LicenseKey
+  AdminUIClientSecret:
+    file: ../../private/local-vm/AdminUIClientSecret
+  UsernamePolicy__Secret:
+    file: ../../private/local-vm/UsernamePolicy__Secret
   IdentityConnectionString:
     file: ../../private/local-vm/IdentityConnectionString
   IdentityServerConnectionString:
     file: ../../private/local-vm/IdentityServerConnectionString
 
-  # ACS
-  IdentityServer__ClientSecret:
-    file: ../../private/local-vm/IdentityServer__ClientSecret
   jdbc.username:
     file: ../../private/local-vm/jdbc.username
   jdbc.password:

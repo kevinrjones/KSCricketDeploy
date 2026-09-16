@@ -2,13 +2,21 @@
 .env
 environments/**/.env
 
-# Secrets
+# Secrets — keep README / cheatsheet; ignore real per-env secret file bodies
 private/.secrets
+private/local-vm/**
+!private/local-vm/.gitkeep
+private/beta/**
+!private/beta/.gitkeep
+# Allow documentation under private/
+!private/README.md
+!private/.secret-names
 
-# TLS certificates
+# TLS certificates + DP PFX
 certs/**/*.crt
 certs/**/*.key
 certs/**/*.pem
+certs/**/*.pfx
 
 # Backup files
 *.sql

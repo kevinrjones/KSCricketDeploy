@@ -1,15 +1,21 @@
 # =============================================================================
 # Beta Environment - Docker Compose
 # =============================================================================
-# Deploy to Netcup VPS with Cloudflare DNS pointing to VPS IP.
-# All services share one network; nginx routes by Host header.
-# Only ports 80 and 443 are exposed on the host.
+# Secrets are file contents under private/beta/ mounted
+# at /run/secrets/<name>. ASP.NET apps (ids, adminui) load them via KeyPerFile.
+# ACS API overlays /run/secrets onto its config map. MariaDB uses *_PASSWORD_FILE.
+# Do NOT put secret file paths into app env vars as if they were the secret values.
 # =============================================================================
 
 name: acs-beta
 
 services:
   # ---- MariaDB ----
+  # MariaDB hosts multiple databases:
+  #   - identity: IdentityServer and AdminUI
+  #   - cricketarchive: ACS API
+  #   - cricket: additional cricket database
+  # The initialization script in ../../mariadb/init runs automatically on first volume startup.
   mariadb:
     image: ${MARIADB_IMAGE:-mariadb:11}
     restart: unless-stopped
@@ -17,14 +23,15 @@ services:
       MARIADB_ROOT_PASSWORD_FILE: /run/secrets/mariadb_root_password
       MARIADB_PASSWORD_FILE: /run/secrets/mariadb_password
       MARIADB_DATABASE: ${MARIADB_DATABASE:-identity}
-      MARIADB_USER: ${MARIADB_USER:-acs_user}
+      MARIADB_USER: ${MARIADB_USER:-identity}
     secrets:
       - mariadb_root_password
       - mariadb_password
+      - jdbc.username
+      - jdbc.password
     volumes:
+      - ../../mariadb/init:/docker-entrypoint-initdb.d:ro
       - beta-mariadb-data:/var/lib/mysql
-      # Mount SQL init scripts for first-time setup (remove after init)
-      # - ../sql/init:/docker-entrypoint-initdb.d
     networks:
       - acs-net
     healthcheck:
@@ -34,35 +41,26 @@ services:
       retries: 12
       start_period: 30s
 
-  # ---- IdentityServer ----
+  # ---- IdentityServer (ids) ----
+  # Loads every file in /run/secrets as config (ConnectionStrings__identity → ConnectionStrings:identity).
   ids:
-    image: ${IDS_IMAGE:?Set IDS_IMAGE}
+    image: ${IDS_IMAGE:?Set IDS_IMAGE in environments/beta/.env}
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:5000
       DOTNET_PRINT_TELEMETRY_MESSAGE: "false"
-      # Secrets mounted as env vars via files
-      ConnectionStrings__identity: /run/secrets/ConnectionStrings__identity
-      ConnectionStrings__configuration: /run/secrets/ConnectionStrings__configuration
-      ConnectionStrings__persistedgrants: /run/secrets/ConnectionStrings__persistedgrants
-      DataProtection__Keys__ConnectionString: /run/secrets/DataProtection__Keys__ConnectionString
-      DataProtection__Keys__ProtectKeysWithCertificate: /run/secrets/DataProtection__Keys__ProtectKeysWithCertificate
-      Authentication__Google__ClientId: /run/secrets/Authentication__Google__ClientId
-      Authentication__Google__ClientSecret: /run/secrets/Authentication__Google__ClientSecret
-      # Public origin for OIDC - must match nginx server_name
+      # Non-secret public URL (must match nginx Host + OIDC issuer)
       PublicOrigin: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
+      # DP PFX path inside the container (file is volume-mounted; password is a secret file)
+      DataProtection__Certificate__Path: /run/certs/ids-mysql-dp.pfx
     secrets:
       - ConnectionStrings__identity
-      - ConnectionStrings__configuration
-      - ConnectionStrings__persistedgrants
-      - DataProtection__Keys__ConnectionString
-      - DataProtection__Keys__ProtectKeysWithCertificate
+      - DataProtection__Certificate__Password
       - Authentication__Google__ClientId
       - Authentication__Google__ClientSecret
     volumes:
       - beta-ids-logs:/app/logs
-      # Mount data protection certificate
       - ../../certs/beta/ids-mysql-dp.pfx:/run/certs/ids-mysql-dp.pfx:ro
     networks:
       - acs-net
@@ -74,28 +72,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 30s
+      start_period: 45s
 
   # ---- AdminUI ----
+  # KeyPerFile: secret *filenames* must be LicenseKey, AdminUIClientSecret, etc.
   adminui:
-    image: ${ADMINUI_IMAGE:?Set ADMINUI_IMAGE}
+    image: ${ADMINUI_IMAGE:?Set ADMINUI_IMAGE in environments/beta/.env}
     restart: unless-stopped
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_URLS: http://+:8080
-      # Secrets
-      LicenseKey: /run/secrets/AdminUI__LicenseKey
-      AdminUIClientSecret: /run/secrets/AdminUI__ClientSecret
-      UsernamePolicy__Secret: /run/secrets/AdminUI__UsernamePolicy__Secret
       UiUrl: https://${ADMINUI_HOSTNAME:-adminui-beta.knowledgespike.cricket}
       AuthorityUrl: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
-      IdentityConnectionString: /run/secrets/IdentityConnectionString
-      IdentityServerConnectionString: /run/secrets/IdentityServerConnectionString
       RequireHttpsMetadata: "true"
     secrets:
-      - AdminUI__LicenseKey
-      - AdminUI__ClientSecret
-      - AdminUI__UsernamePolicy__Secret
+      - LicenseKey
+      - AdminUIClientSecret
+      - UsernamePolicy__Secret
       - IdentityConnectionString
       - IdentityServerConnectionString
     volumes:
@@ -112,26 +105,24 @@ services:
       interval: 10s
       timeout: 5s
       retries: 12
-      start_period: 30s
+      start_period: 45s
 
   # ---- ACS Web ----
+  # Reads OIDC_* from environment (not KeyPerFile). Client secret comes from .env.
   acs-web:
-    image: ${ACS_WEB_IMAGE:?Set ACS_WEB_IMAGE}
+    image: ${ACS_WEB_IMAGE:?Set ACS_WEB_IMAGE in environments/beta/.env}
     restart: unless-stopped
     environment:
       DEVELOPMENT: "false"
-      PORT: 5002
+      PORT: "5002"
       HOST: 0.0.0.0
-      # OIDC - must match public hostnames
       OIDC_AUTHORITY: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
-      OIDC_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}/signin-oidc
-      OIDC_POST_LOGOUT_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}/
-      ACS_API_BASE_URL: https://${ACS_API_HOSTNAME:-api-beta.knowledgespike.cricket}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-acsstats}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET in environments/beta/.env}
+      OIDC_REDIRECT_URI: https://${WEB_HOSTNAME:-web-beta.knowledgespike.cricket}/signin-oidc
+      OIDC_POST_LOGOUT_REDIRECT_URI: https://${WEB_HOSTNAME:-web-beta.knowledgespike.cricket}/
+      ACS_API_BASE_URL: https://${API_HOSTNAME:-api-beta.knowledgespike.cricket}
       KTOR_ENVIRONMENT: beta
-      # Secret
-      IdentityServer__ClientSecret: /run/secrets/IdentityServer__ClientSecret
-    secrets:
-      - IdentityServer__ClientSecret
     volumes:
       - beta-acs-web-logs:/opt/app/logs
     networks:
@@ -147,23 +138,18 @@ services:
       start_period: 5s
 
   # ---- ACS API ----
+  # HOCON + env for URL/issuer; jdbc.username / jdbc.password files in /run/secrets override.
   acs-api:
-    image: ${ACS_API_IMAGE:?Set ACS_API_IMAGE}
+    image: ${ACS_API_IMAGE:?Set ACS_API_IMAGE in environments/beta/.env}
     restart: unless-stopped
     environment:
       DEVELOPMENT: "false"
-      PORT: 5004
+      PORT: "5004"
       HOST: 0.0.0.0
-      # Database - connects to mariadb on the shared network
       JDBCURL: jdbc:mariadb://mariadb:3306/cricketarchive
-      # OIDC - must match public hostnames
       JWKSURL: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/.well-known/openid-configuration/jwks
       ISSUER: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
-      # CORS - must match ACS web public hostname
-      CORS_ORIGINS: https://${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}
-      # Secrets
-      jdbc.username: /run/secrets/jdbc.username
-      jdbc.password: /run/secrets/jdbc.password
+      CORS_ORIGINS: https://${WEB_HOSTNAME:-web-beta.knowledgespike.cricket}
     secrets:
       - jdbc.username
       - jdbc.password
@@ -193,8 +179,8 @@ services:
         aliases:
           - ${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
           - ${ADMINUI_HOSTNAME:-adminui-beta.knowledgespike.cricket}
-          - ${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}
-          - ${ACS_API_HOSTNAME:-api-beta.knowledgespike.cricket}
+          - ${WEB_HOSTNAME:-web-beta.knowledgespike.cricket}
+          - ${API_HOSTNAME:-api-beta.knowledgespike.cricket}
     depends_on:
       ids:
         condition: service_healthy
@@ -223,44 +209,33 @@ volumes:
   beta-acs-api-logs:
     name: beta-acs-api-logs
 
+# Each secret file's *basename* is the name inside /run/secrets/
 secrets:
-  # MariaDB
   mariadb_root_password:
     file: ../../private/beta/mariadb_root_password
   mariadb_password:
     file: ../../private/beta/mariadb_password
 
-  # IdentityServer
   ConnectionStrings__identity:
     file: ../../private/beta/ConnectionStrings__identity
-  ConnectionStrings__configuration:
-    file: ../../private/beta/ConnectionStrings__configuration
-  ConnectionStrings__persistedgrants:
-    file: ../../private/beta/ConnectionStrings__persistedgrants
-  DataProtection__Keys__ConnectionString:
-    file: ../../private/beta/DataProtection__Keys__ConnectionString
-  DataProtection__Keys__ProtectKeysWithCertificate:
-    file: ../../private/beta/DataProtection__Keys__ProtectKeysWithCertificate
+  DataProtection__Certificate__Password:
+    file: ../../private/beta/DataProtection__Certificate__Password
   Authentication__Google__ClientId:
     file: ../../private/beta/Authentication__Google__ClientId
   Authentication__Google__ClientSecret:
     file: ../../private/beta/Authentication__Google__ClientSecret
 
-  # AdminUI
-  AdminUI__LicenseKey:
-    file: ../../private/beta/AdminUI__LicenseKey
-  AdminUI__ClientSecret:
-    file: ../../private/beta/AdminUI__ClientSecret
-  AdminUI__UsernamePolicy__Secret:
-    file: ../../private/beta/AdminUI__UsernamePolicy__Secret
+  LicenseKey:
+    file: ../../private/beta/LicenseKey
+  AdminUIClientSecret:
+    file: ../../private/beta/AdminUIClientSecret
+  UsernamePolicy__Secret:
+    file: ../../private/beta/UsernamePolicy__Secret
   IdentityConnectionString:
     file: ../../private/beta/IdentityConnectionString
   IdentityServerConnectionString:
     file: ../../private/beta/IdentityServerConnectionString
 
-  # ACS
-  IdentityServer__ClientSecret:
-    file: ../../private/beta/IdentityServer__ClientSecret
   jdbc.username:
     file: ../../private/beta/jdbc.username
   jdbc.password:

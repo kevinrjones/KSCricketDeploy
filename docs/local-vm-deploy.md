@@ -1,523 +1,434 @@
-# Local VM deploy guide (laptop)
+# Local VM Deployment Guide (Step-by-Step)
 
-Step-by-step: run the **same** Compose stack as beta on a **Linux VM on your laptop**, reach it via **hosts file** (or split DNS), and use a **private CA / self-signed** certificate. This path does **not** use Cloudflare A records — a private LAN IP is not a public origin.
+This guide walks you step-by-step through deploying the full application stack to a Linux Virtual Machine running on your laptop.
 
-**Related:** [README — DNS and local VM](../README.md#dns-and-local-vm) · Identity `docs/deployment-advice.md` (Phase 5).
+You will run the **exact same Docker Compose stack** used in production/beta, but reached locally through your laptop's `hosts` file and secured with a local private Certificate Authority (CA).
 
 ---
 
-## What you will end up with
+## Architecture Overview
 
-| Piece           | Value (defaults in this repo)                                                                       |
-|-----------------|-----------------------------------------------------------------------------------------------------|
-| Compose project | `environments/local-vm` (`name: acs-local-vm`)                                                      |
-| Hostnames       | `ids-vm`, `adminui-vm`, `web-vm`, `api-vm` under `knowledgespike.cricket`                           |
-| Name resolution | Laptop `/etc/hosts` (or macOS equivalent) → VM **LAN IP**                                           |
-| TLS             | Private CA + server cert with those four names as SANs → `certs/local-vm/server.crt` + `server.key` |
-| Edge            | nginx on VM ports **80/443** only                                                                   |
-| Cloudflare      | **Not** used for A→private IP (optional Tunnel is out of scope for this guide)                      |
+When deployed, your VM will run 6 interconnected containers inside a single Docker network:
 
-OIDC only works if **issuer, authority, redirects, and browser URL** all use the same `*-vm` hostnames.
+```
+Laptop Browser
+      │
+      │  https://*.knowledgespike.cricket (via /etc/hosts -> VM IP)
+      ▼
+┌────────────────────────────────────────────────────────┐
+│ Linux VM                                               │
+│                                                        │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │ nginx (Edge Reverse Proxy, ports 80 & 443)       │  │
+│  └──────┬────────────┬─────────────┬────────────┬───┘  │
+│         │            │             │            │      │
+│         ▼            ▼             ▼            ▼      │
+│     ┌───────┐  ┌───────────┐  ┌─────────┐  ┌─────────┐ │
+│     │  ids  │  │  adminui  │  │ acs-web │  │ acs-api │ │
+│     └───┬───┘  └─────┬─────┘  └────┬────┘  └────┬────┘ │
+│         │            │             │            │      │
+│         │            │             │ OIDC Auth  │      │
+│         │            │             └───────────►│      │
+│         │            │                          │      │
+│         ▼            ▼                          ▼      │
+│     ┌────────────────────────────────────────────────┐ │
+│     │ MariaDB (Port 3306, internal only)             │ │
+│     │ Databases: identity, cricketarchive, cricket   │ │
+│     └────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────┘
+```
+
+### The Three Databases
+
+The MariaDB container hosts all application databases on one instance:
+
+1. **`identity`** — Used by IdentityServer (`ids`) and AdminUI for user accounts, configuration, operational grants, and Data Protection keys.
+2. **`cricketarchive`** — Used by the Cricket Archive API (`acs-api`).
+3. **`cricket`** — Used for cricket statistics and upcoming applications.
+
+**Automatic Initialization:**  
+In the old Docker Swarm setup, SQL scripts were mounted into `/docker-entrypoint-initdb.d`. We use that exact same automatic pattern here: the script in `mariadb/init/01-init-databases.sh` is mounted into `/docker-entrypoint-initdb.d` inside MariaDB. When MariaDB starts up for the first time with a fresh volume, it automatically runs this script to create all three databases and configure their users and permissions. You don't need to manually run any SQL to get started!
 
 ---
 
 ## Prerequisites
 
-### On the host laptop
+Before you start, make sure you have:
 
-- A hypervisor you already use (UTM, VirtualBox, VMware, Parallels, etc.)
-- Ability to edit the hosts file (admin/sudo)
-- `openssl` (macOS/Linux) if you generate certs on the laptop
-- Optional: Docker Hub login if images are private
-
-### On the Linux VM
-
-- Fresh-ish Linux (Ubuntu 22.04/24.04 LTS is fine)
-- Network in **bridged** or equivalent mode so the VM gets a **LAN IP** the laptop can reach (not only NAT-only with no port forwards)
-- SSH access from the laptop
-- ~4+ GB RAM recommended if Identity + AdminUI + ACS + MariaDB all run together
-
-### Accounts / artifacts
-
-- Published images (or tags you can pull):  
-  `knowledgespike/ids`, `knowledgespike/adminui`,  
-  `knowledgespike/acs-cricketarchive-web`, `knowledgespike/acs-cricketarchive-api`
-- Real secret values for `private/local-vm/` (placeholders say `changeme` until you replace them)
-- Duende / AdminUI license and client secrets as required by the apps
+- A virtualization app on your laptop (UTM, VirtualBox, VMware Fusion, or Parallels).
+- A Linux VM installed (Ubuntu 22.04 or 24.04 LTS recommended) with at least 4 GB RAM.
+- Administrative (sudo) access on both your laptop and the VM.
+- `openssl` installed on your laptop (standard on macOS and Linux).
 
 ---
 
-## Phase 0 — Create and network the VM
+## Step 1: Set Up VM Networking & Note the VM IP
 
-1. Create a Linux VM and install a desktop-optional server image.
-2. Set networking so the VM is reachable from the laptop on a stable address, for example:
-   - **Bridged** → DHCP LAN IP like `192.168.1.50`
-   - or **host-only / shared** network with a fixed IP you control
-3. On the VM, note the IP:
+To reach your VM by domain name from your laptop browser, the VM must have a network address that your laptop can communicate with.
 
+1. In your hypervisor settings, configure the VM network adapter:
+   - **Bridged Networking** (recommended): Your VM gets its own IP address on your home/office Wi-Fi or LAN (e.g. `192.168.1.50`).
+   - Alternatively, **Host-Only / Shared Networking**: Gives the VM a private IP accessible only to your host laptop.
+
+2. Boot the VM, log in, and find its IP address:
    ```bash
-   hostname -I
-   # or: ip -4 addr show
+   ip -4 addr show
+   ```
+   Look for your network interface (e.g. `eth0` or `enp0s3`) and note the IPv4 address (e.g. `192.168.1.50`).
+
+3. On your **laptop**, test that you can reach the VM:
+   ```bash
+   ping -c 3 <VM_IP>
+   ssh <user>@<VM_IP>
    ```
 
-4. From the **laptop**, confirm connectivity:
+---
 
+## Step 2: Install Docker and Docker Compose on the VM
+
+SSH into your VM and install the official Docker packages.
+
+1. Update packages and install prerequisites:
    ```bash
-   ping -c 2 <VM_LAN_IP>
-   ssh <user>@<VM_LAN_IP>
+   sudo apt-get update
+   sudo apt-get install -y ca-certificates curl
    ```
 
-5. (Optional but useful) Give the VM a static DHCP reservation on your router so the IP does not drift and break hosts entries.
+2. Add Docker's official GPG key:
+   ```bash
+   sudo install -m 0755 -d /etc/apt/keyrings
+   sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+   sudo chmod a+r /etc/apt/keyrings/docker.asc
+   ```
+
+3. Add the Docker repository to Apt sources:
+   ```bash
+   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+     $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+     sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+   ```
+
+4. Install Docker Engine and the Compose plugin:
+   ```bash
+   sudo apt-get update
+   sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+   ```
+
+5. Add your user to the `docker` group so you can run Docker without `sudo`:
+   ```bash
+   sudo usermod -aG docker "$USER"
+   newgrp docker
+   ```
+
+6. Verify the installation:
+   ```bash
+   docker --version
+   docker compose version
+   ```
+
+7. If you have `ufw` firewall enabled, allow HTTP, HTTPS, and SSH:
+   ```bash
+   sudo ufw allow OpenSSH
+   sudo ufw allow 80/tcp
+   sudo ufw allow 443/tcp
+   ```
 
 ---
 
-## Phase 1 — Install Docker on the VM
+## Step 3: Copy or Clone `acs-deploy` to the VM
 
-On the VM (Ubuntu example):
+Place the `acs-deploy` project into your home directory on the VM (`~/acs-deploy`).
 
+**Option A — If your repo is on GitHub:**
 ```bash
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-sudo apt-get update
-sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-sudo usermod -aG docker "$USER"
-# log out and back in (or newgrp docker)
-docker version
-docker compose version
+git clone https://github.com/kevinrjones/KSCricketDeploy.git ~/acs-deploy
+cd ~/acs-deploy
 ```
 
-Open host firewall only as needed (if `ufw` is on):
-
+**Option B — Copy from your laptop via rsync:**
+Run this on your **laptop**:
 ```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-sudo ufw enable   # if you use ufw
-sudo ufw status
-```
-
-Do **not** publish MariaDB `3306` on the host.
-
-If images are on a private Docker Hub account:
-
-```bash
-docker login
-```
-
----
-
-## Phase 2 — Get the deploy repo onto the VM
-
-Pick one:
-
-**A. Git clone (preferred once the repo is on GitHub)**
-
-```bash
-cd ~
-git clone <YOUR_ACS_DEPLOY_GIT_URL> acs-deploy
-cd acs-deploy
-```
-
-**B. Copy from the laptop** (repo still only local)
-
-```bash
-# on laptop — example
-rsync -a --exclude '.git' \
+rsync -avz --exclude '.git' --exclude 'node_modules' \
   /Users/kevinjones/Dropbox/projects/cricket/acs-deploy/ \
-  <user>@<VM_LAN_IP>:~/acs-deploy/
+  <user>@<VM_IP>:~/acs-deploy/
 ```
 
-Then on the VM:
-
+Then SSH into the VM:
 ```bash
+ssh <user>@<VM_IP>
 cd ~/acs-deploy
 ```
 
 ---
 
-## Phase 3 — Environment file and secrets
+## Step 4: Configure the Environment File
 
-### 3.1 `.env` for local-vm
+The `.env` file defines image tags, hostnames, and database settings.
+
+1. Copy the template to `environments/local-vm/.env`:
+   ```bash
+   cp .env.example environments/local-vm/.env
+   ```
+
+2. Open `environments/local-vm/.env` in an editor:
+   ```bash
+   nano environments/local-vm/.env
+   ```
+
+3. Review the settings. The defaults are already configured for local VM deployment:
+   ```bash
+   # Docker Images
+   IDS_IMAGE=knowledgespike/acs-cricketarchive-ids:latest
+   ADMINUI_IMAGE=knowledgespike/acs-cricketarchive-adminui:latest
+   ACS_WEB_IMAGE=knowledgespike/acs-cricketarchive-web:latest
+   ACS_API_IMAGE=knowledgespike/acs-cricketarchive-api:latest
+   MARIADB_IMAGE=mariadb:11
+   NGINX_IMAGE=nginx:stable-alpine
+
+   # Hostnames for local VM routing
+   IDS_HOSTNAME=ids-vm.knowledgespike.cricket
+   ADMINUI_HOSTNAME=adminui-vm.knowledgespike.cricket
+   WEB_HOSTNAME=web-vm.knowledgespike.cricket
+   API_HOSTNAME=api-vm.knowledgespike.cricket
+
+   # MariaDB App User
+   MARIADB_DATABASE=identity
+   MARIADB_USER=identity
+
+   # ACS Web OIDC Credentials
+   OIDC_CLIENT_ID=acsstats
+   OIDC_CLIENT_SECRET=change-me-to-the-identity-client-secret
+
+   TZ=UTC
+   ```
+
+4. Set `OIDC_CLIENT_SECRET` to the client secret configured in IdentityServer for the `acsstats` client. Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`).
+
+---
+
+## Step 5: Generate and Configure Secret Files
+
+Sensitive data (passwords, connection strings, license keys) are stored as individual files under `private/local-vm/` and mounted securely into `/run/secrets/` inside containers.
+
+### Step 5.1: Run the automated secret generator
+
+Run the included helper script to generate random secure passwords, matching database connection strings, and the Data Protection certificate:
 
 ```bash
-cd ~/acs-deploy
-cp .env.example environments/local-vm/.env
-# or edit the existing environments/local-vm/.env
+chmod +x scripts/generate-local-vm-secrets.sh
+./scripts/generate-local-vm-secrets.sh
 ```
 
-Set at least:
+This script automatically creates:
+- `mariadb_root_password` — Random MariaDB root password.
+- `mariadb_password` — Random password for the `identity` user.
+- `ConnectionStrings__identity` — Connection string for IdentityServer pointing to MariaDB.
+- `IdentityConnectionString` & `IdentityServerConnectionString` — Matching strings for AdminUI.
+- `jdbc.username` (`cricketarchive`) & `jdbc.password` — Credentials for the ACS API.
+- `DataProtection__Certificate__Password` & `certs/local-vm/ids-mysql-dp.pfx` — ASP.NET Data Protection encryption key.
+- `AdminUIClientSecret` & `UsernamePolicy__Secret` — AdminUI operational credentials.
 
-| Variable           | Example / notes                                                                               |
-|--------------------|-----------------------------------------------------------------------------------------------|
-| `IDS_IMAGE`        | Pin a tag/sha you trust, e.g. `knowledgespike/ids:sha-…` (avoid living on `latest` long-term) |
-| `ADMINUI_IMAGE`    | Same                                                                                          |
-| `ACS_WEB_IMAGE`    | `knowledgespike/acs-cricketarchive-web:…`                                                     |
-| `ACS_API_IMAGE`    | `knowledgespike/acs-cricketarchive-api:…`                                                     |
-| `IDS_HOSTNAME`     | `ids-vm.knowledgespike.cricket`                                                               |
-| `ADMINUI_HOSTNAME` | `adminui-vm.knowledgespike.cricket`                                                           |
-| `WEB_HOSTNAME`     | `web-vm.knowledgespike.cricket`                                                               |
-| `API_HOSTNAME`     | `api-vm.knowledgespike.cricket`                                                               |
-| `MARIADB_*`        | Match what you put in DB secrets / connection strings                                         |
+### Step 5.2: Set vendor license and credentials
 
-Hostnames in `.env` must match:
-
-- nginx `server_name`s in `nginx/local-vm.conf`
-- OIDC public URLs inside app config / secrets
-- names you put in the hosts file (Phase 5)
-
-### 3.2 Replace secret placeholders
+Now provide your real vendor values for AdminUI and Google authentication:
 
 ```bash
-ls private/local-vm/
-```
+# 1. Duende AdminUI License Key 
+printf '%s' 'PASTE_YOUR_ADMINUI_LICENSE_KEY_HERE' > private/local-vm/LicenseKey
 
-Replace every `changeme` (and empty) file with real values. Typical set:
+# 2. Google OAuth credentials (required by IdentityServer on boot) - look in the .microsoft/usersecrets
+printf '%s' 'YOUR_GOOGLE_CLIENT_ID' > private/local-vm/Authentication__Google__ClientId
+printf '%s' 'YOUR_GOOGLE_CLIENT_SECRET' > private/local-vm/Authentication__Google__ClientSecret
 
-- `mariadb_root_password`, `mariadb_password`
-- `ids_connection_string` — must use Compose service name `mariadb` as host, not `localhost`, e.g. server=`mariadb`
-- `ids_data_protection_password` + mount/use matching PFX if your image expects it (see app docs / Identity local secrets)
-- Google client id/secret if used
-- AdminUI license, client secret, authority-related settings as required
-- ACS API/web secrets (OIDC client secret, connection strings, etc.)
-
-Tighten permissions:
-
-```bash
+# 3. Lock down file permissions
 chmod 600 private/local-vm/*
 ```
 
-**Never commit** real `private/**` or `environments/*/.env` (see `.gitignore`).
+---
 
-### 3.3 OIDC hostname checklist (local-vm)
+## Step 6: Create TLS Certificates (Private CA)
 
-Use **only** `*-vm` public URLs, for example:
+Because your VM is on a local private IP, we use a local Certificate Authority (CA) to sign a certificate covering all four local hostnames.
 
-- Identity public origin: `https://ids-vm.knowledgespike.cricket`
-- AdminUI UI URL: `https://adminui-vm.knowledgespike.cricket`
-- ACS authority / JWKS: `https://ids-vm.knowledgespike.cricket` (and JWKS path as your app expects)
-- ACS redirect: `https://web-vm.knowledgespike.cricket/signin-oidc` (adjust path to match the app)
+1. Run the certificate generation script:
+   ```bash
+   chmod +x scripts/generate-local-vm-certs.sh
+   ./scripts/generate-local-vm-certs.sh
+   ```
 
-Register the same redirect URIs on the Identity client configuration for this environment.
+2. This produces the following files in `certs/local-vm/`:
+   - `dev-ca.crt` — The Root CA public certificate. **You will install this on your laptop.**
+   - `dev-ca.key` — The private key for your CA.
+   - `server.crt` — The SSL certificate configured for:
+     - `ids-vm.knowledgespike.cricket`
+     - `adminui-vm.knowledgespike.cricket`
+     - `web-vm.knowledgespike.cricket`
+     - `api-vm.knowledgespike.cricket`
+   - `server.key` — The private key for nginx TLS termination.
 
 ---
 
-## Phase 4 — Create TLS certificates (private CA)
+## Step 7: Configure Your Laptop (Hosts File & CA Trust)
 
-nginx mounts:
+Do this on your **host laptop** (macOS or Linux):
 
-- `certs/local-vm/server.crt`
-- `certs/local-vm/server.key`
+### Step 7.1: Update your laptop's `/etc/hosts` file
 
-You need a certificate whose **SANs** include all four hostnames (and TLS that your browser will trust after you install the CA).
-
-### Option A — Script in this repo (recommended)
-
-On a machine with OpenSSL (laptop or VM), from the **acs-deploy** root:
-
+Open `/etc/hosts` on your laptop with sudo:
 ```bash
-chmod +x scripts/generate-local-vm-certs.sh
-./scripts/generate-local-vm-certs.sh
+sudo nano /etc/hosts
 ```
 
-This creates:
-
+Add this line (replace `<VM_IP>` with your VM's actual IP address from Step 1):
 ```text
-certs/local-vm/
-  dev-ca.crt      # install this in the laptop trust store
-  dev-ca.key      # keep private; do not share
-  server.crt      # nginx
-  server.key      # nginx
+<VM_IP>  ids-vm.knowledgespike.cricket adminui-vm.knowledgespike.cricket web-vm.knowledgespike.cricket api-vm.knowledgespike.cricket
 ```
+Save and exit.
 
-Optional overrides:
-
+Test resolution from your laptop terminal:
 ```bash
-./scripts/generate-local-vm-certs.sh \
-  --domain knowledgespike.cricket \
-  --days 825
-# SANs: ids-vm / adminui-vm / web-vm / api-vm .<domain>
+ping -c 2 ids-vm.knowledgespike.cricket
 ```
+It should reply from `<VM_IP>`.
 
-If you already generated certs and only need to refresh the server cert:
+### Step 7.2: Trust `dev-ca.crt` on your laptop
 
+Copy `dev-ca.crt` from the VM to your laptop:
 ```bash
-./scripts/generate-local-vm-certs.sh --force-server
+# Run this on your laptop:
+scp <user>@<VM_IP>:~/acs-deploy/certs/local-vm/dev-ca.crt ~/Desktop/dev-ca.crt
 ```
 
-Copy onto the VM if you generated on the laptop:
+**On macOS:**
+1. Open **Keychain Access** app.
+2. Drag `~/Desktop/dev-ca.crt` into the **System** or **login** keychain.
+3. Double-click **KnowledgeSpike Local VM Dev CA**.
+4. Expand **Trust** and set **When using this certificate** to **Always Trust**.
+5. Close the window and authenticate with your macOS password.
 
+**On Linux (laptop):**
 ```bash
-# from laptop
-scp certs/local-vm/server.crt certs/local-vm/server.key \
-  <user>@<VM_LAN_IP>:~/acs-deploy/certs/local-vm/
-```
-
-On the VM:
-
-```bash
-chmod 644 certs/local-vm/server.crt
-chmod 600 certs/local-vm/server.key
-```
-
-Keep `dev-ca.crt` on the **laptop** for trust (Phase 5). You do not need the CA private key on the VM for day-to-day run.
-
-### Option B — Manual OpenSSL (same outcome)
-
-```bash
-mkdir -p certs/local-vm
-cd certs/local-vm
-
-# CA
-openssl genrsa -out dev-ca.key 4096
-openssl req -x509 -new -nodes -key dev-ca.key -sha256 -days 825 \
-  -out dev-ca.crt \
-  -subj "/CN=KnowledgeSpike local-vm Dev CA/O=KnowledgeSpike"
-
-# Server key + CSR
-openssl genrsa -out server.key 2048
-cat > server-ext.cnf <<'EOF'
-authorityKeyIdentifier=keyid,issuer
-basicConstraints=CA:FALSE
-keyUsage = digitalSignature, keyEncipherment
-extendedKeyUsage = serverAuth
-subjectAltName = @alt_names
-
-[alt_names]
-DNS.1 = ids-vm.knowledgespike.cricket
-DNS.2 = adminui-vm.knowledgespike.cricket
-DNS.3 = web-vm.knowledgespike.cricket
-DNS.4 = api-vm.knowledgespike.cricket
-EOF
-
-openssl req -new -key server.key -out server.csr \
-  -subj "/CN=ids-vm.knowledgespike.cricket/O=KnowledgeSpike"
-
-openssl x509 -req -in server.csr -CA dev-ca.crt -CAkey dev-ca.key \
-  -CAcreateserial -out server.crt -days 825 -sha256 \
-  -extfile server-ext.cnf
-
-rm -f server.csr dev-ca.srl server-ext.cnf
-chmod 600 server.key dev-ca.key
-chmod 644 server.crt dev-ca.crt
-```
-
-### Data Protection PFX (Identity)
-
-If your IdS image expects a DP certificate file (as in Identity local `compose`), generate or copy a PFX and wire it through secrets/volumes the same way as local Identity — password in `ids_data_protection_password`. This guide’s nginx cert is **separate** from the DP PFX.
-
----
-
-## Phase 5 — Hosts file on the laptop (and trust the CA)
-
-### 5.1 Hosts entries
-
-Replace `192.168.x.x` with the real VM LAN IP.
-
-**macOS / Linux (laptop)**
-
-```bash
-sudo ${EDITOR:-nano} /etc/hosts
-```
-
-Add one line (or four):
-
-```text
-192.168.x.x  ids-vm.knowledgespike.cricket adminui-vm.knowledgespike.cricket web-vm.knowledgespike.cricket api-vm.knowledgespike.cricket
-```
-
-Flush DNS cache if needed:
-
-```bash
-# macOS
-sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
-```
-
-**Windows (if you browse from Windows)**
-
-`C:\Windows\System32\drivers\etc\hosts` — same four names → VM IP; run editor as Administrator.
-
-### 5.2 Trust `dev-ca.crt` on the laptop
-
-Until the CA is trusted, browsers show certificate errors and some OIDC flows misbehave.
-
-**macOS (login keychain)**
-
-```bash
-# path to the CA you generated
-security add-trusted-cert -r trustRoot -k ~/Library/Keychains/login.keychain-db \
-  /path/to/acs-deploy/certs/local-vm/dev-ca.crt
-```
-
-Or: Keychain Access → import `dev-ca.crt` → set **When using this certificate: Always Trust** (SSL).
-
-**Linux desktop (example)**
-
-```bash
-sudo cp dev-ca.crt /usr/local/share/ca-certificates/knowledgespike-local-vm.crt
+sudo cp ~/Desktop/dev-ca.crt /usr/local/share/ca-certificates/dev-ca.crt
 sudo update-ca-certificates
 ```
 
-Firefox may use its own store: Settings → Certificates → Import.
-
-**curl tests** after trust (or use `--cacert`):
-
-```bash
-curl -vI https://ids-vm.knowledgespike.cricket/health/ready
-```
-
-### 5.3 Confirm resolution before Compose
-
-```bash
-# laptop
-ping -c 1 ids-vm.knowledgespike.cricket
-# should show VM_LAN_IP
-
-getent hosts ids-vm.knowledgespike.cricket || dscacheutil -q host -a name ids-vm.knowledgespike.cricket
-```
+Now your laptop browsers (Safari, Chrome) and `curl` will trust the VM's HTTPS certificates without any security warnings.
 
 ---
 
-## Phase 6 — First deploy on the VM
+## Step 8: Deploy the Application Stack
 
-From `~/acs-deploy` on the VM:
+Back on your **VM**, start the containers:
 
-```bash
-# sanity
-test -f environments/local-vm/.env
-test -f certs/local-vm/server.crt
-test -f certs/local-vm/server.key
-test -f nginx/local-vm.conf
+1. Run the deployment script:
+   ```bash
+   cd ~/acs-deploy
+   chmod +x scripts/deploy.sh
+   ./scripts/deploy.sh local-vm
+   ```
 
-./scripts/deploy.sh local-vm
-```
+2. What `deploy.sh` does:
+   - Pulls the latest container images.
+   - Starts MariaDB, mounts `mariadb/init/01-init-databases.sh`, and initializes the `identity`, `cricketarchive`, and `cricket` databases automatically.
+   - Starts IdentityServer, AdminUI, ACS Web, and ACS API.
+   - Starts nginx on ports 80 and 443 with your TLS certificates.
+   - Monitors container health checks until all services report healthy.
 
-Or manually:
-
-```bash
-cd environments/local-vm
-docker compose --env-file .env pull
-docker compose --env-file .env up -d
-docker compose --env-file .env ps
-docker compose --env-file .env logs -f nginx ids
-```
-
-Wait until healthchecks pass (`deploy.sh` waits up to ~5 minutes).
+3. Verify running containers:
+   ```bash
+   cd ~/acs-deploy/environments/local-vm
+   docker compose --env-file .env ps
+   ```
+   All 6 services (`mariadb`, `ids`, `adminui`, `acs-web`, `acs-api`, `nginx`) should show `Up` or `Up (healthy)`.
 
 ---
 
-## Phase 7 — Verify from the laptop
+## Step 9: Verify Everything Works
+
+### Step 9.1: Test health endpoints via curl
+
+From your **laptop**, test each service over HTTPS:
 
 ```bash
-# TLS + routing
-curl -fsS -o /dev/null -w "%{http_code}\n" https://ids-vm.knowledgespike.cricket/health/ready
-curl -fsS -o /dev/null -w "%{http_code}\n" https://adminui-vm.knowledgespike.cricket/
-curl -fsS -o /dev/null -w "%{http_code}\n" https://api-vm.knowledgespike.cricket/health/ready
-curl -fsS -o /dev/null -w "%{http_code}\n" https://web-vm.knowledgespike.cricket/
+# IdentityServer health endpoint
+curl -fsS https://ids-vm.knowledgespike.cricket/health/ready && echo " -> IdS OK"
+
+# AdminUI root page
+curl -fsSI https://adminui-vm.knowledgespike.cricket/ | head -n 1
+
+# ACS API health endpoint
+curl -fsS https://api-vm.knowledgespike.cricket/health/ready && echo " -> API OK"
+
+# ACS Web home page
+curl -fsSI https://web-vm.knowledgespike.cricket/ | head -n 1
 ```
 
-In the browser:
+### Step 9.2: Test in your browser
 
-1. Open `https://ids-vm.knowledgespike.cricket` — lock icon, no warning (if CA trusted).
-2. Open ACS web → login → confirm redirect host stays on `*-vm` names (no accidental `ids-beta` or `ids.local`).
-3. AdminUI against the same IdS.
+1. Open **`https://ids-vm.knowledgespike.cricket`** in your browser:
+   - You should see the IdentityServer landing page with a secure lock icon (no certificate warnings).
+2. Open **`https://adminui-vm.knowledgespike.cricket`**:
+   - You should see the AdminUI login and dashboard.
+3. Open **`https://web-vm.knowledgespike.cricket`**:
+   - Click login. It will redirect to `ids-vm.knowledgespike.cricket` for authentication, and return back to `web-vm.knowledgespike.cricket/signin-oidc`.
 
-On the VM, if something fails:
+---
+
+## Common Operations
+
+### View live logs
+
+On the VM:
+```bash
+cd ~/acs-deploy/environments/local-vm
+
+# View logs for a specific service
+docker compose --env-file .env logs -f ids
+docker compose --env-file .env logs -f adminui
+docker compose --env-file .env logs -f acs-api
+docker compose --env-file .env logs -f acs-web
+docker compose --env-file .env logs -f nginx
+```
+
+### Restart a single service
 
 ```bash
 cd ~/acs-deploy/environments/local-vm
-docker compose --env-file .env ps
-docker compose --env-file .env logs --tail=200 ids adminui acs-api acs-web nginx
+docker compose --env-file .env restart acs-web
 ```
 
----
-
-## Day-2 operations
-
-### Redeploy after new image tags
-
-1. Edit `environments/local-vm/.env` image pins.
-2. `./scripts/deploy.sh local-vm`
-
-### Backup DB
+### Stop and start the stack
 
 ```bash
-./scripts/backup.sh local-vm
+cd ~/acs-deploy/environments/local-vm
+
+# Stop all containers
+docker compose --env-file .env down
+
+# Start everything back up
+docker compose --env-file .env up -d
 ```
 
-### Change VM IP
+### Back up the MariaDB databases
 
-1. Update laptop `/etc/hosts`.
-2. No Compose change required unless apps embedded the old IP (they should use hostnames only).
+A backup script is included that dumps all databases (`identity`, `cricketarchive`, `cricket`) to a timestamped compressed archive:
 
-### Add another laptop client
-
-1. Same hosts line → VM IP.  
-2. Install the **same** `dev-ca.crt`.
+```bash
+cd ~/acs-deploy
+chmod +x scripts/backup.sh
+./scripts/backup.sh local-vm
+```
+Backups are saved to `backups/local-vm/`.
 
 ---
 
 ## Troubleshooting
 
-| Symptom                     | Likely cause                                         | What to try                                                                      |
-|-----------------------------|------------------------------------------------------|----------------------------------------------------------------------------------|
-| Browser: DNS not found      | Hosts not loaded / typo                              | Check `/etc/hosts`, flush DNS cache                                              |
-| Browser: connection refused | Wrong IP, VM down, nginx not up                      | `ping` VM; `docker compose ps`; `ss -lntp \| grep -E ':80\|:443'` on VM          |
-| Browser: cert warning       | CA not trusted or SAN missing hostname               | Re-import `dev-ca.crt`; regenerate server cert with all four SANs                |
-| curl works, browser fails   | Browser DNS / different profile / Firefox store      | Check Firefox cert store; try Safari/Chrome                                      |
-| OIDC redirect_uri mismatch  | Client config still beta/local                       | Align Identity client redirects with `web-vm…`                                   |
-| Issuer mismatch             | `PublicOrigin` / authority still `ids.local` or beta | Fix env/secrets; restart ids + acs-*                                             |
-| Mixed content / wrong host  | Page or API still pointing at another env            | Search config for `beta`, `ids.local`, `localhost`                               |
-| Images pull fail            | Not logged in / tag missing                          | `docker login`; confirm tags on Hub                                              |
-| MariaDB unhealthy           | Bad passwords / secret files                         | Check `private/local-vm/mariadb_*`; recreate volume only if you accept data loss |
-| nginx fails to start        | Missing cert files or bad paths                      | `ls -la certs/local-vm/`; compose mount paths                                    |
-
-### Confirms you are **not** on the Cloudflare path
-
-- No orange-cloud A record to `192.168…`
-- Laptop resolves `*-vm` to LAN IP (`ping` / `dig` should not show Cloudflare anycast IPs for that name if hosts is correct; hosts usually short-circuits before public DNS)
-
----
-
-## Optional later: Cloudflare Tunnel
-
-If you need **public** DNS or access off-LAN without a public IP:
-
-1. Install `cloudflared` on the VM.  
-2. Create a tunnel and Cloudflare CNAME routes for `ids-vm…` etc. to nginx.  
-3. **Do not** create A records to the private IP.
-
-Tunnel edge ≠ beta “proxy → origin 443”. This hosts+CA guide remains the default for LAN rehearsal. See README.
-
----
-
-## Quick checklist
-
-- [ ] VM has LAN IP; laptop can SSH/ping it  
-- [ ] Docker + Compose plugin on VM  
-- [ ] `acs-deploy` on VM  
-- [ ] `environments/local-vm/.env` hostnames + image pins  
-- [ ] `private/local-vm/*` real secrets, mode `600`  
-- [ ] OIDC URLs all `*-vm`  
-- [ ] `certs/local-vm/server.crt` + `server.key` (SANs for four names)  
-- [ ] Laptop hosts → VM IP  
-- [ ] Laptop trusts `dev-ca.crt`  
-- [ ] `./scripts/deploy.sh local-vm` healthy  
-- [ ] Browser OIDC login on ACS web works end-to-end  
-
----
-
-## What this guide deliberately skips
-
-- Cloudflare Full (strict) and origin certificates (beta/VPS only)  
-- OpenTofu, automated GH Actions deploy to the VM  
-- Publishing a custom nginx image  
-- LocalCan/ngrok as the primary multi-hostname setup  
+| Symptom | Cause | Solution |
+|---|---|---|
+| **Browser: Server Not Found** | Laptop `/etc/hosts` missing entry or typo | Check `/etc/hosts` on laptop. Ensure the IP matches the VM IP. |
+| **Browser: Connection Refused** | nginx not running or firewall blocking port 443 | On VM, check `docker compose ps`. Run `sudo ufw allow 80/tcp && sudo ufw allow 443/tcp`. |
+| **Browser: Invalid / Untrusted Certificate** | `dev-ca.crt` not installed or not trusted | Re-import `dev-ca.crt` on laptop into Keychain/system store and mark as Always Trust. |
+| **IdentityServer fails on boot** | Missing Google OAuth credentials | Ensure `Authentication__Google__ClientId` and `Authentication__Google__ClientSecret` have values in `private/local-vm/`. |
+| **AdminUI shows license error** | Missing or expired license | Check `private/local-vm/LicenseKey` file contents. |
+| **OIDC Login: Redirect URI mismatch** | Client redirect URI in Identity doesn't match `https://web-vm...` | Log into AdminUI and verify that the `acsstats` client has `https://web-vm.knowledgespike.cricket/signin-oidc` registered as an allowed redirect URI. |

@@ -61,12 +61,18 @@ All services share one Docker network. nginx routes by `Host` header. Only ports
 ├── nginx/
 │   ├── beta.conf           # Beta nginx config
 │   └── local-vm.conf       # Local VM nginx config
+├── mariadb/
+│   └── init/
+│       └── 01-init-databases.sh # Automated DB init: identity, cricketarchive, cricket
 ├── certs/                  # Origin TLS certificates (gitignored)
 ├── scripts/
-│   ├── deploy.sh                    # Deploy script (pull + up)
-│   ├── backup.sh                    # MariaDB backup script
-│   └── generate-local-vm-certs.sh   # Private CA + nginx cert for *-vm hostnames
-├── private/                # Per-env secret files (placeholders committed; real values gitignored patterns)
+│   ├── deploy.sh                       # Deploy script (pull + up)
+│   ├── backup.sh                       # MariaDB backup script
+│   ├── generate-local-vm-certs.sh      # Private CA + nginx cert for *-vm hostnames
+│   └── generate-local-vm-secrets.sh    # DB/OIDC-related secret files + DP PFX
+├── private/                # Per-env secret *files* (gitignored bodies; see private/README.md)
+│   ├── .secret-names       # Cheatsheet only (not loaded by Compose)
+│   ├── README.md
 │   ├── beta/
 │   └── local-vm/
 └── docs/
@@ -107,36 +113,40 @@ Images are tagged with:
 
 ## Secrets
 
-Secrets are managed via file-based secrets (not Swarm secrets). The `private/` directory contains:
+**Two stores** (do not mix them up):
 
-1. `.secret-names` — Template listing all required secrets (committed)
-2. `.secrets` — Actual secret values (gitignored)
+| Store | Path | Holds |
+|-------|------|--------|
+| Env | `environments/<env>/.env` | Image tags, hostnames, `MARIADB_DATABASE` / `MARIADB_USER`, ACS Web `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` |
+| Files | `private/<env>/<filename>` | Passwords, connection strings, AdminUI license, Google OAuth — **one value per file**, mounted at `/run/secrets/<filename>` |
 
-### Required Secrets
+- `private/.secret-names` is a **cheatsheet only** (Compose does not load it).
+- `private/README.md` summarises the model.
+- Full local-vm walkthrough: **[docs/local-vm-deploy.md](docs/local-vm-deploy.md)**.
 
-| Secret Name | Description | Used By |
-|-------------|-------------|---------|
-| `ConnectionStrings__identity` | MariaDB connection string for Identity | ids, adminui |
-| `ConnectionStrings__configuration` | MariaDB connection string for IdS config | ids |
-| `ConnectionStrings__persistedgrants` | MariaDB connection string for IdS grants | ids |
-| `DataProtection__Keys__ConnectionString` | MariaDB connection string for DP keys | ids |
-| `DataProtection__Keys__ProtectKeysWithCertificate` | Certificate thumbprint for DP keys | ids |
-| `Authentication__Google__ClientId` | Google OAuth client ID | ids |
-| `Authentication__Google__ClientSecret` | Google OAuth client secret | ids |
-| `AdminUI__LicenseKey` | AdminUI license key | adminui |
-| `ACS__ApiSecret` | ACS API secret for internal auth | acs-api |
+### Required secret files (local-vm)
 
-### How to Set Secrets
+| File under `private/local-vm/` | Used by |
+|--------------------------------|---------|
+| `mariadb_root_password`, `mariadb_password` | MariaDB |
+| `ConnectionStrings__identity` | ids |
+| `DataProtection__Certificate__Password` | ids (+ matching `certs/local-vm/ids-mysql-dp.pfx`) |
+| `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret` | ids |
+| `LicenseKey`, `AdminUIClientSecret`, `UsernamePolicy__Secret` | adminui |
+| `IdentityConnectionString`, `IdentityServerConnectionString` | adminui |
+| `jdbc.username`, `jdbc.password` | acs-api |
+
+ACS Web client secret is **`OIDC_CLIENT_SECRET` in `.env`**, not a secret file.
+
+### How to set secrets (local-vm)
 
 ```bash
-# 1. Copy the template
-cp private/.secret-names private/.secrets
+cp .env.example environments/local-vm/.env
+# edit image tags, hostnames, OIDC_CLIENT_SECRET
 
-# 2. Edit with actual values
-$EDITOR private/.secrets
-
-# 3. Ensure permissions are restrictive
-chmod 600 private/.secrets
+./scripts/generate-local-vm-secrets.sh
+# then replace LicenseKey + Google files with real values
+chmod 600 private/local-vm/*
 ```
 
 ## TLS Certificates
