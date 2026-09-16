@@ -1,0 +1,267 @@
+# =============================================================================
+# Beta Environment - Docker Compose
+# =============================================================================
+# Deploy to Netcup VPS with Cloudflare DNS pointing to VPS IP.
+# All services share one network; nginx routes by Host header.
+# Only ports 80 and 443 are exposed on the host.
+# =============================================================================
+
+name: acs-beta
+
+services:
+  # ---- MariaDB ----
+  mariadb:
+    image: ${MARIADB_IMAGE:-mariadb:11}
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/mariadb_root_password
+      MARIADB_PASSWORD_FILE: /run/secrets/mariadb_password
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-identity}
+      MARIADB_USER: ${MARIADB_USER:-acs_user}
+    secrets:
+      - mariadb_root_password
+      - mariadb_password
+    volumes:
+      - beta-mariadb-data:/var/lib/mysql
+      # Mount SQL init scripts for first-time setup (remove after init)
+      # - ../sql/init:/docker-entrypoint-initdb.d
+    networks:
+      - acs-net
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ---- IdentityServer ----
+  ids:
+    image: ${IDS_IMAGE:?Set IDS_IMAGE}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5000
+      DOTNET_PRINT_TELEMETRY_MESSAGE: "false"
+      # Secrets mounted as env vars via files
+      ConnectionStrings__identity: /run/secrets/ConnectionStrings__identity
+      ConnectionStrings__configuration: /run/secrets/ConnectionStrings__configuration
+      ConnectionStrings__persistedgrants: /run/secrets/ConnectionStrings__persistedgrants
+      DataProtection__Keys__ConnectionString: /run/secrets/DataProtection__Keys__ConnectionString
+      DataProtection__Keys__ProtectKeysWithCertificate: /run/secrets/DataProtection__Keys__ProtectKeysWithCertificate
+      Authentication__Google__ClientId: /run/secrets/Authentication__Google__ClientId
+      Authentication__Google__ClientSecret: /run/secrets/Authentication__Google__ClientSecret
+      # Public origin for OIDC - must match nginx server_name
+      PublicOrigin: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
+    secrets:
+      - ConnectionStrings__identity
+      - ConnectionStrings__configuration
+      - ConnectionStrings__persistedgrants
+      - DataProtection__Keys__ConnectionString
+      - DataProtection__Keys__ProtectKeysWithCertificate
+      - Authentication__Google__ClientId
+      - Authentication__Google__ClientSecret
+    volumes:
+      - beta-ids-logs:/app/logs
+      # Mount data protection certificate
+      - ../../certs/beta/ids-mysql-dp.pfx:/run/certs/ids-mysql-dp.pfx:ro
+    networks:
+      - acs-net
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:5000/health/ready | grep -q 'status'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ---- AdminUI ----
+  adminui:
+    image: ${ADMINUI_IMAGE:?Set ADMINUI_IMAGE}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      # Secrets
+      LicenseKey: /run/secrets/AdminUI__LicenseKey
+      AdminUIClientSecret: /run/secrets/AdminUI__ClientSecret
+      UsernamePolicy__Secret: /run/secrets/AdminUI__UsernamePolicy__Secret
+      UiUrl: https://${ADMINUI_HOSTNAME:-adminui-beta.knowledgespike.cricket}
+      AuthorityUrl: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
+      IdentityConnectionString: /run/secrets/IdentityConnectionString
+      IdentityServerConnectionString: /run/secrets/IdentityServerConnectionString
+      RequireHttpsMetadata: "true"
+    secrets:
+      - AdminUI__LicenseKey
+      - AdminUI__ClientSecret
+      - AdminUI__UsernamePolicy__Secret
+      - IdentityConnectionString
+      - IdentityServerConnectionString
+    volumes:
+      - beta-adminui-logs:/app/logs
+    networks:
+      - acs-net
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      ids:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/health/ready | grep -q 'status'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ---- ACS Web ----
+  acs-web:
+    image: ${ACS_WEB_IMAGE:?Set ACS_WEB_IMAGE}
+    restart: unless-stopped
+    environment:
+      DEVELOPMENT: "false"
+      PORT: 5002
+      HOST: 0.0.0.0
+      # OIDC - must match public hostnames
+      OIDC_AUTHORITY: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
+      OIDC_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}/signin-oidc
+      OIDC_POST_LOGOUT_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}/
+      ACS_API_BASE_URL: https://${ACS_API_HOSTNAME:-api-beta.knowledgespike.cricket}
+      KTOR_ENVIRONMENT: beta
+      # Secret
+      IdentityServer__ClientSecret: /run/secrets/IdentityServer__ClientSecret
+    secrets:
+      - IdentityServer__ClientSecret
+    volumes:
+      - beta-acs-web-logs:/opt/app/logs
+    networks:
+      - acs-net
+    depends_on:
+      ids:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:5002/"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  # ---- ACS API ----
+  acs-api:
+    image: ${ACS_API_IMAGE:?Set ACS_API_IMAGE}
+    restart: unless-stopped
+    environment:
+      DEVELOPMENT: "false"
+      PORT: 5004
+      HOST: 0.0.0.0
+      # Database - connects to mariadb on the shared network
+      JDBCURL: jdbc:mariadb://mariadb:3306/cricketarchive
+      # OIDC - must match public hostnames
+      JWKSURL: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/.well-known/openid-configuration/jwks
+      ISSUER: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
+      # CORS - must match ACS web public hostname
+      CORS_ORIGINS: https://${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}
+      # Secrets
+      jdbc.username: /run/secrets/jdbc.username
+      jdbc.password: /run/secrets/jdbc.password
+    secrets:
+      - jdbc.username
+      - jdbc.password
+    volumes:
+      - beta-acs-api-logs:/opt/app/logs
+    networks:
+      - acs-net
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      ids:
+        condition: service_healthy
+
+  # ---- Edge Nginx ----
+  nginx:
+    image: ${NGINX_IMAGE:-nginx:stable-alpine}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../../nginx/beta.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../../certs/beta/server.crt:/etc/nginx/certs/server.crt:ro
+      - ../../certs/beta/server.key:/etc/nginx/certs/server.key:ro
+    networks:
+      acs-net:
+        aliases:
+          - ${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
+          - ${ADMINUI_HOSTNAME:-adminui-beta.knowledgespike.cricket}
+          - ${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}
+          - ${ACS_API_HOSTNAME:-api-beta.knowledgespike.cricket}
+    depends_on:
+      ids:
+        condition: service_healthy
+      adminui:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz | grep -q 'ok'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+
+networks:
+  acs-net:
+    name: acs-beta-net
+
+volumes:
+  beta-mariadb-data:
+    name: beta-mariadb-data
+  beta-ids-logs:
+    name: beta-ids-logs
+  beta-adminui-logs:
+    name: beta-adminui-logs
+  beta-acs-web-logs:
+    name: beta-acs-web-logs
+  beta-acs-api-logs:
+    name: beta-acs-api-logs
+
+secrets:
+  # MariaDB
+  mariadb_root_password:
+    file: ../../private/beta/mariadb_root_password
+  mariadb_password:
+    file: ../../private/beta/mariadb_password
+
+  # IdentityServer
+  ConnectionStrings__identity:
+    file: ../../private/beta/ConnectionStrings__identity
+  ConnectionStrings__configuration:
+    file: ../../private/beta/ConnectionStrings__configuration
+  ConnectionStrings__persistedgrants:
+    file: ../../private/beta/ConnectionStrings__persistedgrants
+  DataProtection__Keys__ConnectionString:
+    file: ../../private/beta/DataProtection__Keys__ConnectionString
+  DataProtection__Keys__ProtectKeysWithCertificate:
+    file: ../../private/beta/DataProtection__Keys__ProtectKeysWithCertificate
+  Authentication__Google__ClientId:
+    file: ../../private/beta/Authentication__Google__ClientId
+  Authentication__Google__ClientSecret:
+    file: ../../private/beta/Authentication__Google__ClientSecret
+
+  # AdminUI
+  AdminUI__LicenseKey:
+    file: ../../private/beta/AdminUI__LicenseKey
+  AdminUI__ClientSecret:
+    file: ../../private/beta/AdminUI__ClientSecret
+  AdminUI__UsernamePolicy__Secret:
+    file: ../../private/beta/AdminUI__UsernamePolicy__Secret
+  IdentityConnectionString:
+    file: ../../private/beta/IdentityConnectionString
+  IdentityServerConnectionString:
+    file: ../../private/beta/IdentityServerConnectionString
+
+  # ACS
+  IdentityServer__ClientSecret:
+    file: ../../private/beta/IdentityServer__ClientSecret
+  jdbc.username:
+    file: ../../private/beta/jdbc.username
+  jdbc.password:
+    file: ../../private/beta/jdbc.password

@@ -1,0 +1,254 @@
+# =============================================================================
+# Local VM Environment - Docker Compose
+# =============================================================================
+# Deploy to a local Linux VM for testing. Same structure as beta, but with
+# different hostnames and potentially self-signed certificates.
+# =============================================================================
+
+name: acs-local-vm
+
+services:
+  # ---- MariaDB ----
+  mariadb:
+    image: ${MARIADB_IMAGE:-mariadb:11}
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/mariadb_root_password
+      MARIADB_PASSWORD_FILE: /run/secrets/mariadb_password
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-identity}
+      MARIADB_USER: ${MARIADB_USER:-acs_user}
+    secrets:
+      - mariadb_root_password
+      - mariadb_password
+    volumes:
+      - vm-mariadb-data:/var/lib/mysql
+    networks:
+      - acs-net
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh --connect --innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ---- IdentityServer ----
+  ids:
+    image: ${IDS_IMAGE:?Set IDS_IMAGE}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:5000
+      DOTNET_PRINT_TELEMETRY_MESSAGE: "false"
+      ConnectionStrings__identity: /run/secrets/ConnectionStrings__identity
+      ConnectionStrings__configuration: /run/secrets/ConnectionStrings__configuration
+      ConnectionStrings__persistedgrants: /run/secrets/ConnectionStrings__persistedgrants
+      DataProtection__Keys__ConnectionString: /run/secrets/DataProtection__Keys__ConnectionString
+      DataProtection__Keys__ProtectKeysWithCertificate: /run/secrets/DataProtection__Keys__ProtectKeysWithCertificate
+      Authentication__Google__ClientId: /run/secrets/Authentication__Google__ClientId
+      Authentication__Google__ClientSecret: /run/secrets/Authentication__Google__ClientSecret
+      PublicOrigin: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
+    secrets:
+      - ConnectionStrings__identity
+      - ConnectionStrings__configuration
+      - ConnectionStrings__persistedgrants
+      - DataProtection__Keys__ConnectionString
+      - DataProtection__Keys__ProtectKeysWithCertificate
+      - Authentication__Google__ClientId
+      - Authentication__Google__ClientSecret
+    volumes:
+      - vm-ids-logs:/app/logs
+      - ../../certs/local-vm/ids-mysql-dp.pfx:/run/certs/ids-mysql-dp.pfx:ro
+    networks:
+      - acs-net
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:5000/health/ready | grep -q 'status'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ---- AdminUI ----
+  adminui:
+    image: ${ADMINUI_IMAGE:?Set ADMINUI_IMAGE}
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      LicenseKey: /run/secrets/AdminUI__LicenseKey
+      AdminUIClientSecret: /run/secrets/AdminUI__ClientSecret
+      UsernamePolicy__Secret: /run/secrets/AdminUI__UsernamePolicy__Secret
+      UiUrl: https://${ADMINUI_HOSTNAME:-adminui-vm.knowledgespike.cricket}
+      AuthorityUrl: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
+      IdentityConnectionString: /run/secrets/IdentityConnectionString
+      IdentityServerConnectionString: /run/secrets/IdentityServerConnectionString
+      RequireHttpsMetadata: "true"
+    secrets:
+      - AdminUI__LicenseKey
+      - AdminUI__ClientSecret
+      - AdminUI__UsernamePolicy__Secret
+      - IdentityConnectionString
+      - IdentityServerConnectionString
+    volumes:
+      - vm-adminui-logs:/app/logs
+    networks:
+      - acs-net
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      ids:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/health/ready | grep -q 'status'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # ---- ACS Web ----
+  acs-web:
+    image: ${ACS_WEB_IMAGE:?Set ACS_WEB_IMAGE}
+    restart: unless-stopped
+    environment:
+      DEVELOPMENT: "false"
+      PORT: 5002
+      HOST: 0.0.0.0
+      OIDC_AUTHORITY: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
+      OIDC_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/signin-oidc
+      OIDC_POST_LOGOUT_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/
+      ACS_API_BASE_URL: https://${ACS_API_HOSTNAME:-api-vm.knowledgespike.cricket}
+      KTOR_ENVIRONMENT: local-vm
+      IdentityServer__ClientSecret: /run/secrets/IdentityServer__ClientSecret
+    secrets:
+      - IdentityServer__ClientSecret
+    volumes:
+      - vm-acs-web-logs:/opt/app/logs
+    networks:
+      - acs-net
+    depends_on:
+      ids:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:5002/"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  # ---- ACS API ----
+  acs-api:
+    image: ${ACS_API_IMAGE:?Set ACS_API_IMAGE}
+    restart: unless-stopped
+    environment:
+      DEVELOPMENT: "false"
+      PORT: 5004
+      HOST: 0.0.0.0
+      JDBCURL: jdbc:mariadb://mariadb:3306/cricketarchive
+      JWKSURL: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}/.well-known/openid-configuration/jwks
+      ISSUER: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
+      CORS_ORIGINS: https://${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
+      jdbc.username: /run/secrets/jdbc.username
+      jdbc.password: /run/secrets/jdbc.password
+    secrets:
+      - jdbc.username
+      - jdbc.password
+    volumes:
+      - vm-acs-api-logs:/opt/app/logs
+    networks:
+      - acs-net
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      ids:
+        condition: service_healthy
+
+  # ---- Edge Nginx ----
+  nginx:
+    image: ${NGINX_IMAGE:-nginx:stable-alpine}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ../../nginx/local-vm.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../../certs/local-vm/server.crt:/etc/nginx/certs/server.crt:ro
+      - ../../certs/local-vm/server.key:/etc/nginx/certs/server.key:ro
+    networks:
+      acs-net:
+        aliases:
+          - ${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
+          - ${ADMINUI_HOSTNAME:-adminui-vm.knowledgespike.cricket}
+          - ${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
+          - ${ACS_API_HOSTNAME:-api-vm.knowledgespike.cricket}
+    depends_on:
+      ids:
+        condition: service_healthy
+      adminui:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz | grep -q 'ok'"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+
+networks:
+  acs-net:
+    name: acs-local-vm-net
+
+volumes:
+  vm-mariadb-data:
+    name: vm-mariadb-data
+  vm-ids-logs:
+    name: vm-ids-logs
+  vm-adminui-logs:
+    name: vm-adminui-logs
+  vm-acs-web-logs:
+    name: vm-acs-web-logs
+  vm-acs-api-logs:
+    name: vm-acs-api-logs
+
+secrets:
+  # MariaDB
+  mariadb_root_password:
+    file: ../../private/local-vm/mariadb_root_password
+  mariadb_password:
+    file: ../../private/local-vm/mariadb_password
+
+  # IdentityServer
+  ConnectionStrings__identity:
+    file: ../../private/local-vm/ConnectionStrings__identity
+  ConnectionStrings__configuration:
+    file: ../../private/local-vm/ConnectionStrings__configuration
+  ConnectionStrings__persistedgrants:
+    file: ../../private/local-vm/ConnectionStrings__persistedgrants
+  DataProtection__Keys__ConnectionString:
+    file: ../../private/local-vm/DataProtection__Keys__ConnectionString
+  DataProtection__Keys__ProtectKeysWithCertificate:
+    file: ../../private/local-vm/DataProtection__Keys__ProtectKeysWithCertificate
+  Authentication__Google__ClientId:
+    file: ../../private/local-vm/Authentication__Google__ClientId
+  Authentication__Google__ClientSecret:
+    file: ../../private/local-vm/Authentication__Google__ClientSecret
+
+  # AdminUI
+  AdminUI__LicenseKey:
+    file: ../../private/local-vm/AdminUI__LicenseKey
+  AdminUI__ClientSecret:
+    file: ../../private/local-vm/AdminUI__ClientSecret
+  AdminUI__UsernamePolicy__Secret:
+    file: ../../private/local-vm/AdminUI__UsernamePolicy__Secret
+  IdentityConnectionString:
+    file: ../../private/local-vm/IdentityConnectionString
+  IdentityServerConnectionString:
+    file: ../../private/local-vm/IdentityServerConnectionString
+
+  # ACS
+  IdentityServer__ClientSecret:
+    file: ../../private/local-vm/IdentityServer__ClientSecret
+  jdbc.username:
+    file: ../../private/local-vm/jdbc.username
+  jdbc.password:
+    file: ../../private/local-vm/jdbc.password
