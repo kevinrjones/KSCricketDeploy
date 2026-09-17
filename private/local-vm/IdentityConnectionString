@@ -1,1 +1,1 @@
-server=mariadb;database=identity;user=identity;password=27dfffa8becb1e87995e39327abde8e2cad1c342daf7af1d;Command Timeout=180
+server=mariadb;database=identity;user=identity;password=changeme;Command Timeout=180

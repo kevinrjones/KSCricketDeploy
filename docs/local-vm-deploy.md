@@ -413,10 +413,10 @@ cd ~/acs-deploy
 # If using uncompressed SQL (e.g. from Parallels shared folder):
 docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
   'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive' \
-  < /media/psf/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql
+  < /media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql
 
 # Or if using a gzipped dump:
-gunzip -c /path/to/cricketarchive-upload.sql.gz | docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
+gunzip -c /media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz | docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
   'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive'
 ```
 
@@ -424,7 +424,7 @@ gunzip -c /path/to/cricketarchive-upload.sql.gz | docker compose -f environments
 ```bash
 docker exec -i acs-local-vm-mariadb-1 sh -c \
   'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive' \
-  < /media/psf/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql
+  < /media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql
 ```
 
 ### Option B: Using the Helper Script
@@ -436,12 +436,12 @@ cd ~/acs-deploy
 chmod +x scripts/import-cricket-data.sh
 
 # Run inside the VM (will auto-detect default backup path if omitted):
-./scripts/import-cricket-data.sh /media/psf/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql local-vm
+./scripts/import-cricket-data.sh /media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql local-vm
 ```
 
 You can also run the import script directly from your **laptop** targeting the VM over SSH:
 ```bash
-./scripts/import-cricket-data.sh ~/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql local-vm
+./scripts/import-cricket-data.sh ~/Dropbox/dumps/mysql/cricketarchive-upload.sql local-vm
 ```
 
 ### Step 10.1: Verify Cricket Data Import
