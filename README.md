@@ -62,12 +62,18 @@ All services share one Docker network. nginx routes by `Host` header. Only ports
 │   ├── beta.conf           # Beta nginx config
 │   └── local-vm.conf       # Local VM nginx config
 ├── mariadb/
+│   ├── baseline/
+│   │   └── schema.ddl             # Modern EF Core 9 baseline DDL
 │   └── init/
-│       └── 01-init-databases.sh # Automated DB init: identity, cricketarchive, cricket
+│       ├── 01-init-databases.sh   # Automated DB & user setup (identity, cricketarchive, cricket)
+│       ├── 02-init-identity-data.sh # Automated baseline seed on empty volume
+│       └── identity-baseline.sql.template # Cleaned identity baseline template
 ├── certs/                  # Origin TLS certificates (gitignored)
 ├── scripts/
 │   ├── deploy.sh                       # Deploy script (pull + up)
 │   ├── backup.sh                       # MariaDB backup script
+│   ├── export-identity-db.sh           # Export and clean identity baseline from local DB
+│   ├── import-identity-db.sh           # Import sanitized baseline into running target
 │   ├── generate-local-vm-certs.sh      # Private CA + nginx cert for *-vm hostnames
 │   └── generate-local-vm-secrets.sh    # DB/OIDC-related secret files + DP PFX
 ├── private/                # Per-env secret *files* (gitignored bodies; see private/README.md)
@@ -205,6 +211,68 @@ The script:
 
 Backs up all databases to SQL dumps. Run regularly via cron.
 
+## Identity Database Baseline & Migration
+
+The Identity database contains users, roles, claims, clients, and API resources. To migrate data from a laptop development database without machine-specific artifacts (e.g. localhost URLs, ephemeral session tokens, host-specific encryption keys):
+
+### 1. Export Clean Baseline from Laptop
+
+```bash
+./scripts/export-identity-db.sh [source_database] [output_file]
+```
+- Defaults: source `identity-dev`, output `mariadb/init/identity-baseline.sql.template`.
+- Dumps users, roles, claims, client definitions, and resources while stripping ephemeral keys (`DataProtectionKeys`, `Keys`, `PersistedGrants`, `AuditEntries`).
+- Replaces machine-specific URLs and client secrets with environment template placeholders (`{{IDS_URL}}`, `{{WEB_URL}}`, `{{ADMINUI_SECRET_HASH}}`, etc.).
+
+### 2. Automatic Clean VM Installation
+
+On first boot of a clean VM (with empty MariaDB volumes):
+- MariaDB automatically executes `mariadb/init/02-init-identity-data.sh`.
+- The script detects the environment hostnames and secret files (`AdminUIClientSecret`, `OIDC_CLIENT_SECRET`), computes the required SHA-512 hashes, renders the template, and seeds the database automatically before services start.
+
+### 3. Immediate Import into Running VM
+
+To apply the baseline data to an already running VM container immediately:
+
+```bash
+./scripts/import-identity-db.sh local-vm
+```
+- Reads the environment hostnames (`environments/local-vm/.env`) and secrets (`private/local-vm/`).
+- Computes SHA-512 hashes and streams the rendered SQL directly into the running MariaDB container (locally or over SSH).
+
+## Cricket Data Import
+
+The `cricketarchive` database holds match, player, team, and statistical data consumed by the `acs-api` service.
+
+### 1. Direct Command Line in VM
+
+Stream the dump file directly into the running MariaDB container:
+
+```bash
+cd ~/acs-deploy
+
+# Uncompressed SQL:
+docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
+  'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive' \
+  < /media/psf/Dropbox/dumps/mysql/CricketArchive/DatabaseBackup/cricketarchive-upload.sql
+
+# Gzipped SQL:
+gunzip -c /media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz | docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
+  'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive'
+```
+
+### 2. Using the Import Script
+
+A helper script is provided that automatically tunes packet limits and prints table verification counts:
+
+```bash
+# Run on the VM:
+./scripts/import-cricket-data.sh /media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql local-vm
+
+# Or run from the laptop targeting the VM over SSH:
+./scripts/import-cricket-data.sh ~/Dropbox/dumps/mysql/cricketarchive-upload.sql local-vm
+```
+
 ## DNS and local VM
 
 ### Why local VM ≠ Cloudflare A record
@@ -235,7 +303,7 @@ Create A/AAAA records to the **VPS public IP** only:
 
 Short version:
 
-1. Generate certs: `./scripts/generate-local-vm-certs.sh` → `certs/local-vm/server.crt|key` + `dev-ca.crt`.
+1. Generate certs: `./scripts/generate-local-vm-certs.sh` → `certs/local-vm/server.crt|key`, `dev-ca.crt`, and Java `cacerts`.
 2. Deploy `environments/local-vm` on the VM (`./scripts/deploy.sh local-vm`).
 3. On the **laptop**, map names to the VM LAN IP:
 
@@ -243,7 +311,7 @@ Short version:
 192.168.x.x  ids-vm.knowledgespike.cricket adminui-vm.knowledgespike.cricket web-vm.knowledgespike.cricket api-vm.knowledgespike.cricket
 ```
 
-4. Trust `certs/local-vm/dev-ca.crt` on those clients.
+4. Trust `certs/local-vm/dev-ca.crt` on those clients (on macOS: `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain certs/local-vm/dev-ca.crt`) and **restart your browser** (`Cmd + Q`) to prevent "Your connection is not private" warnings.
 5. Keep OIDC issuer/authority/redirect/CORS on the same `*-vm` hostnames end-to-end.
 
 Optional: router or split-DNS instead of editing `/etc/hosts` on every machine.

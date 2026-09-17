@@ -1,0 +1,1175 @@
+-- =============================================================================
+-- Identity Database Clean Baseline Seed Template
+-- Generated automatically by scripts/export-identity-db.sh
+-- =============================================================================
+SET FOREIGN_KEY_CHECKS=0;
+SET SQL_MODE='NO_AUTO_VALUE_ON_ZERO';
+
+-- -----------------------------------------------------------------------------
+-- 1. Drop existing tables upfront (safe for clean or re-import)
+-- -----------------------------------------------------------------------------
+DROP TABLE IF EXISTS `ApiResourceClaims`, `ApiResourceProperties`, `ApiResourceScopes`, `ApiResourceSecrets`, `ApiResources`, `ApiScopeClaims`, `ApiScopeProperties`, `ApiScopes`, `AspNetClaimTypes`, `AspNetRoles`, `AspNetRoleClaims`, `AspNetUserClaims`, `AspNetUserLogins`, `AspNetUserRoles`, `AspNetUserTokens`, `AspNetUsers`, `AuditEntries`, `ClientClaims`, `ClientCorsOrigins`, `ClientGrantTypes`, `ClientIdPRestrictions`, `ClientPostLogoutRedirectUris`, `ClientProperties`, `ClientRedirectUris`, `ClientScopes`, `ClientSecrets`, `Clients`, `ConfigurationEntries`, `DataProtectionKeys`, `DeviceCodes`, `EnumClaimTypeAllowedValues`, `ExtendedApiResources`, `ExtendedClients`, `ExtendedIdentityResources`, `IdentityProviders`, `IdentityResourceClaims`, `IdentityResourceProperties`, `IdentityResources`, `Keys`, `PersistedGrants`, `PushedAuthorizationRequests`, `RelyingParties`, `RelyingPartyClaimMappings`, `SamlArtifacts`, `ServerSideSessions`, `ServiceProviderArtifactResolutionServices`, `ServiceProviderAssertionConsumerServices`, `ServiceProviderClaimMappings`, `ServiceProviderSignCertificates`, `ServiceProviderSingleLogoutServices`, `ServiceProviders`, `__EFMigrationsHistory`;
+
+-- -----------------------------------------------------------------------------
+-- 2. Schema DDL
+-- -----------------------------------------------------------------------------
+/*M!999999\- enable the sandbox mode */ 
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*M!100616 SET @OLD_NOTE_VERBOSITY=@@NOTE_VERBOSITY, NOTE_VERBOSITY=0 */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ApiResourceClaims` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Type` varchar(200) NOT NULL,
+  `ApiResourceId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ApiResourceClaims_ApiResourceId_Type` (`ApiResourceId`,`Type`),
+  CONSTRAINT `FK_ApiResourceClaims_ApiResources_ApiResourceId` FOREIGN KEY (`ApiResourceId`) REFERENCES `ApiResources` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ApiResourceProperties` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Key` varchar(250) NOT NULL,
+  `Value` varchar(2000) NOT NULL,
+  `ApiResourceId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ApiResourceProperties_ApiResourceId_Key` (`ApiResourceId`,`Key`),
+  CONSTRAINT `FK_ApiResourceProperties_ApiResources_ApiResourceId` FOREIGN KEY (`ApiResourceId`) REFERENCES `ApiResources` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ApiResourceScopes` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Scope` varchar(200) NOT NULL,
+  `ApiResourceId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ApiResourceScopes_ApiResourceId_Scope` (`ApiResourceId`,`Scope`),
+  CONSTRAINT `FK_ApiResourceScopes_ApiResources_ApiResourceId` FOREIGN KEY (`ApiResourceId`) REFERENCES `ApiResources` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ApiResourceSecrets` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Description` varchar(1000) DEFAULT NULL,
+  `Value` varchar(4000) CHARACTER SET utf8mb4 COLLATE utf8mb4_uca1400_ai_ci NOT NULL,
+  `Expiration` date DEFAULT NULL,
+  `Type` varchar(250) NOT NULL,
+  `Created` date NOT NULL,
+  `ApiResourceId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  KEY `IX_ApiResourceSecrets_ApiResourceId` (`ApiResourceId`),
+  CONSTRAINT `FK_ApiResourceSecrets_ApiResources_ApiResourceId` FOREIGN KEY (`ApiResourceId`) REFERENCES `ApiResources` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ApiResources` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Description` varchar(1000) DEFAULT NULL,
+  `DisplayName` varchar(200) DEFAULT NULL,
+  `Enabled` bit(1) NOT NULL,
+  `Name` varchar(200) NOT NULL,
+  `Created` datetime(6) NOT NULL DEFAULT '0001-01-01 00:00:00.000000',
+  `LastAccessed` datetime(6) DEFAULT NULL,
+  `NonEditable` tinyint(1) NOT NULL DEFAULT 0,
+  `Updated` datetime(6) DEFAULT NULL,
+  `AllowedAccessTokenSigningAlgorithms` varchar(100) DEFAULT NULL,
+  `ShowInDiscoveryDocument` bit(1) NOT NULL,
+  `RequireResourceIndicator` tinyint(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ApiResources_Name` (`Name`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ApiScopeClaims` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `ScopeId` int(11) DEFAULT NULL,
+  `Type` varchar(200) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ApiScopeClaims_ScopeId_Type` (`ScopeId`,`Type`),
+  CONSTRAINT `FK_ApiScopeClaims_ApiScopes_ScopeId` FOREIGN KEY (`ScopeId`) REFERENCES `ApiScopes` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ApiScopeProperties` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Key` varchar(250) NOT NULL,
+  `Value` varchar(2000) NOT NULL,
+  `ScopeId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ApiScopeProperties_ScopeId_Key` (`ScopeId`,`Key`),
+  CONSTRAINT `FK_ApiScopeProperties_ApiScopes_ScopeId` FOREIGN KEY (`ScopeId`) REFERENCES `ApiScopes` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ApiScopes` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Description` varchar(1000) DEFAULT NULL,
+  `DisplayName` varchar(200) DEFAULT NULL,
+  `Emphasize` bit(1) NOT NULL,
+  `Name` varchar(200) NOT NULL,
+  `Required` bit(1) NOT NULL,
+  `ShowInDiscoveryDocument` bit(1) NOT NULL,
+  `Enabled` bit(1) NOT NULL,
+  `Created` datetime(6) NOT NULL DEFAULT '0001-01-01 00:00:00.000000',
+  `LastAccessed` datetime(6) DEFAULT NULL,
+  `NonEditable` tinyint(1) NOT NULL DEFAULT 0,
+  `Updated` datetime(6) DEFAULT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ApiScopes_Name` (`Name`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `AspNetClaimTypes` (
+  `Id` varchar(127) NOT NULL,
+  `ConcurrencyStamp` longtext DEFAULT NULL,
+  `Description` longtext DEFAULT NULL,
+  `Name` varchar(256) NOT NULL,
+  `NormalizedName` varchar(256) DEFAULT NULL,
+  `Required` bit(1) NOT NULL,
+  `Reserved` bit(1) NOT NULL,
+  `Rule` longtext DEFAULT NULL,
+  `RuleValidationFailureDescription` longtext DEFAULT NULL,
+  `UserEditable` bit(1) NOT NULL DEFAULT b'0',
+  `ValueType` int(11) NOT NULL,
+  `DisplayName` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_uca1400_ai_ci DEFAULT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `AK_AspNetClaimTypes_Name` (`Name`),
+  UNIQUE KEY `ClaimTypeNameIndex` (`NormalizedName`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `AspNetRoles` (
+  `Id` varchar(255) NOT NULL,
+  `Name` varchar(256) DEFAULT NULL,
+  `NormalizedName` varchar(256) DEFAULT NULL,
+  `ConcurrencyStamp` longtext DEFAULT NULL,
+  `Description` longtext DEFAULT NULL,
+  `Reserved` tinyint(1) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `RoleNameIndex` (`NormalizedName`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `AspNetRoleClaims` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `RoleId` varchar(255) NOT NULL,
+  `ClaimType` longtext DEFAULT NULL,
+  `ClaimValue` longtext DEFAULT NULL,
+  PRIMARY KEY (`Id`),
+  KEY `IX_AspNetRoleClaims_RoleId` (`RoleId`),
+  CONSTRAINT `FK_AspNetRoleClaims_AspNetRoles_RoleId` FOREIGN KEY (`RoleId`) REFERENCES `AspNetRoles` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `AspNetUserClaims` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `UserId` varchar(255) NOT NULL,
+  `ClaimType` varchar(256) NOT NULL,
+  `ClaimValue` longtext DEFAULT NULL,
+  PRIMARY KEY (`Id`),
+  KEY `IX_AspNetUserClaims_UserId` (`UserId`),
+  KEY `IX_AspNetUserClaims_ClaimType` (`ClaimType`),
+  CONSTRAINT `FK_AspNetUserClaims_AspNetClaimTypes_ClaimType` FOREIGN KEY (`ClaimType`) REFERENCES `AspNetClaimTypes` (`Name`) ON DELETE CASCADE,
+  CONSTRAINT `FK_AspNetUserClaims_AspNetUsers_UserId` FOREIGN KEY (`UserId`) REFERENCES `AspNetUsers` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `AspNetUserLogins` (
+  `LoginProvider` varchar(255) NOT NULL,
+  `ProviderKey` varchar(255) NOT NULL,
+  `ProviderDisplayName` longtext DEFAULT NULL,
+  `UserId` varchar(255) NOT NULL,
+  PRIMARY KEY (`LoginProvider`,`ProviderKey`),
+  KEY `IX_AspNetUserLogins_UserId` (`UserId`),
+  CONSTRAINT `FK_AspNetUserLogins_AspNetUsers_UserId` FOREIGN KEY (`UserId`) REFERENCES `AspNetUsers` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `AspNetUserRoles` (
+  `UserId` varchar(255) NOT NULL,
+  `RoleId` varchar(255) NOT NULL,
+  PRIMARY KEY (`UserId`,`RoleId`),
+  KEY `IX_AspNetUserRoles_RoleId` (`RoleId`),
+  CONSTRAINT `FK_AspNetUserRoles_AspNetRoles_RoleId` FOREIGN KEY (`RoleId`) REFERENCES `AspNetRoles` (`Id`) ON DELETE CASCADE,
+  CONSTRAINT `FK_AspNetUserRoles_AspNetUsers_UserId` FOREIGN KEY (`UserId`) REFERENCES `AspNetUsers` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `AspNetUserTokens` (
+  `UserId` varchar(255) NOT NULL,
+  `LoginProvider` varchar(255) NOT NULL,
+  `Name` varchar(255) NOT NULL,
+  `Value` longtext DEFAULT NULL,
+  PRIMARY KEY (`UserId`,`LoginProvider`,`Name`),
+  CONSTRAINT `FK_AspNetUserTokens_AspNetUsers_UserId` FOREIGN KEY (`UserId`) REFERENCES `AspNetUsers` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `AspNetUsers` (
+  `Id` varchar(255) NOT NULL,
+  `IsBlocked` tinyint(1) NOT NULL,
+  `IsDeleted` tinyint(1) NOT NULL,
+  `FirstName` longtext DEFAULT NULL,
+  `LastName` longtext DEFAULT NULL,
+  `UserName` varchar(256) DEFAULT NULL,
+  `NormalizedUserName` varchar(256) DEFAULT NULL,
+  `Email` varchar(256) DEFAULT NULL,
+  `NormalizedEmail` varchar(256) DEFAULT NULL,
+  `EmailConfirmed` tinyint(1) NOT NULL,
+  `PasswordHash` longtext DEFAULT NULL,
+  `SecurityStamp` longtext DEFAULT NULL,
+  `ConcurrencyStamp` longtext DEFAULT NULL,
+  `PhoneNumber` longtext DEFAULT NULL,
+  `PhoneNumberConfirmed` tinyint(1) NOT NULL,
+  `TwoFactorEnabled` tinyint(1) NOT NULL,
+  `LockoutEnd` datetime(6) DEFAULT NULL,
+  `LockoutEnabled` tinyint(1) NOT NULL,
+  `AccessFailedCount` int(11) NOT NULL,
+  `NormalizedFirstName` varchar(256) DEFAULT NULL,
+  `NormalizedLastName` varchar(256) DEFAULT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `UserNameIndex` (`NormalizedUserName`),
+  KEY `EmailIndex` (`NormalizedEmail`),
+  KEY `CountIndex` (`IsBlocked`,`IsDeleted`),
+  KEY `CountIndexReversed` (`IsDeleted`,`IsBlocked`),
+  KEY `FirstNameIndex` (`NormalizedFirstName`),
+  KEY `LastNameIndex` (`NormalizedLastName`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `AuditEntries` (
+  `Id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `When` datetime(6) NOT NULL,
+  `Source` longtext DEFAULT NULL,
+  `SubjectType` longtext DEFAULT NULL,
+  `SubjectIdentifier` longtext DEFAULT NULL,
+  `Subject` longtext DEFAULT NULL,
+  `Action` longtext DEFAULT NULL,
+  `ResourceType` longtext DEFAULT NULL,
+  `Resource` longtext DEFAULT NULL,
+  `ResourceIdentifier` longtext DEFAULT NULL,
+  `Succeeded` tinyint(1) NOT NULL,
+  `Description` longtext DEFAULT NULL,
+  `NormalisedSubject` longtext DEFAULT NULL,
+  `NormalisedAction` longtext DEFAULT NULL,
+  `NormalisedResource` longtext DEFAULT NULL,
+  `NormalisedSource` longtext DEFAULT NULL,
+  PRIMARY KEY (`Id`),
+  KEY `IX_AuditEntries_When` (`When`)
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ClientClaims` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Type` varchar(250) NOT NULL,
+  `Value` varchar(250) NOT NULL,
+  `ClientId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ClientClaims_ClientId_Type_Value` (`ClientId`,`Type`,`Value`),
+  CONSTRAINT `FK_ClientClaims_Clients_ClientId` FOREIGN KEY (`ClientId`) REFERENCES `Clients` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ClientCorsOrigins` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Origin` varchar(150) NOT NULL,
+  `ClientId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ClientCorsOrigins_ClientId_Origin` (`ClientId`,`Origin`),
+  CONSTRAINT `FK_ClientCorsOrigins_Clients_ClientId` FOREIGN KEY (`ClientId`) REFERENCES `Clients` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ClientGrantTypes` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `GrantType` varchar(250) NOT NULL,
+  `ClientId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ClientGrantTypes_ClientId_GrantType` (`ClientId`,`GrantType`),
+  CONSTRAINT `FK_ClientGrantTypes_Clients_ClientId` FOREIGN KEY (`ClientId`) REFERENCES `Clients` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ClientIdPRestrictions` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Provider` varchar(200) NOT NULL,
+  `ClientId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ClientIdPRestrictions_ClientId_Provider` (`ClientId`,`Provider`),
+  CONSTRAINT `FK_ClientIdPRestrictions_Clients_ClientId` FOREIGN KEY (`ClientId`) REFERENCES `Clients` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ClientPostLogoutRedirectUris` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `PostLogoutRedirectUri` varchar(400) NOT NULL,
+  `ClientId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ClientPostLogoutRedirectUris_ClientId_PostLogoutRedirectUri` (`ClientId`,`PostLogoutRedirectUri`),
+  CONSTRAINT `FK_ClientPostLogoutRedirectUris_Clients_ClientId` FOREIGN KEY (`ClientId`) REFERENCES `Clients` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ClientProperties` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `ClientId` int(11) NOT NULL,
+  `Key` varchar(250) NOT NULL,
+  `Value` varchar(2000) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ClientProperties_ClientId_Key` (`ClientId`,`Key`),
+  CONSTRAINT `FK_ClientProperties_Clients_ClientId` FOREIGN KEY (`ClientId`) REFERENCES `Clients` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ClientRedirectUris` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `RedirectUri` varchar(400) NOT NULL,
+  `ClientId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ClientRedirectUris_ClientId_RedirectUri` (`ClientId`,`RedirectUri`),
+  CONSTRAINT `FK_ClientRedirectUris_Clients_ClientId` FOREIGN KEY (`ClientId`) REFERENCES `Clients` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ClientScopes` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Scope` varchar(200) NOT NULL,
+  `ClientId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ClientScopes_ClientId_Scope` (`ClientId`,`Scope`),
+  CONSTRAINT `FK_ClientScopes_Clients_ClientId` FOREIGN KEY (`ClientId`) REFERENCES `Clients` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ClientSecrets` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `ClientId` int(11) NOT NULL,
+  `Description` varchar(2000) DEFAULT NULL,
+  `Value` varchar(4000) NOT NULL,
+  `Expiration` datetime(6) DEFAULT NULL,
+  `Type` varchar(250) NOT NULL,
+  `Created` datetime(6) NOT NULL,
+  PRIMARY KEY (`Id`),
+  KEY `IX_ClientSecrets_ClientId` (`ClientId`),
+  CONSTRAINT `FK_ClientSecrets_Clients_ClientId` FOREIGN KEY (`ClientId`) REFERENCES `Clients` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `Clients` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Enabled` tinyint(1) NOT NULL,
+  `ClientId` varchar(200) NOT NULL,
+  `ProtocolType` varchar(200) NOT NULL,
+  `RequireClientSecret` tinyint(1) NOT NULL,
+  `ClientName` varchar(200) DEFAULT NULL,
+  `Description` varchar(1000) DEFAULT NULL,
+  `ClientUri` varchar(2000) DEFAULT NULL,
+  `LogoUri` varchar(2000) DEFAULT NULL,
+  `RequireConsent` tinyint(1) NOT NULL,
+  `AllowRememberConsent` tinyint(1) NOT NULL,
+  `AlwaysIncludeUserClaimsInIdToken` tinyint(1) NOT NULL,
+  `RequirePkce` tinyint(1) NOT NULL,
+  `AllowPlainTextPkce` tinyint(1) NOT NULL,
+  `RequireRequestObject` tinyint(1) NOT NULL,
+  `AllowAccessTokensViaBrowser` tinyint(1) NOT NULL,
+  `RequireDPoP` tinyint(1) NOT NULL,
+  `DPoPValidationMode` int(11) NOT NULL,
+  `DPoPClockSkew` time(6) NOT NULL,
+  `FrontChannelLogoutUri` varchar(2000) DEFAULT NULL,
+  `FrontChannelLogoutSessionRequired` tinyint(1) NOT NULL,
+  `BackChannelLogoutUri` varchar(2000) DEFAULT NULL,
+  `BackChannelLogoutSessionRequired` tinyint(1) NOT NULL,
+  `AllowOfflineAccess` tinyint(1) NOT NULL,
+  `IdentityTokenLifetime` int(11) NOT NULL,
+  `AllowedIdentityTokenSigningAlgorithms` varchar(100) DEFAULT NULL,
+  `AccessTokenLifetime` int(11) NOT NULL,
+  `AuthorizationCodeLifetime` int(11) NOT NULL,
+  `ConsentLifetime` int(11) DEFAULT NULL,
+  `AbsoluteRefreshTokenLifetime` int(11) NOT NULL,
+  `SlidingRefreshTokenLifetime` int(11) NOT NULL,
+  `RefreshTokenUsage` int(11) NOT NULL,
+  `UpdateAccessTokenClaimsOnRefresh` tinyint(1) NOT NULL,
+  `RefreshTokenExpiration` int(11) NOT NULL,
+  `AccessTokenType` int(11) NOT NULL,
+  `EnableLocalLogin` tinyint(1) NOT NULL,
+  `IncludeJwtId` tinyint(1) NOT NULL,
+  `AlwaysSendClientClaims` tinyint(1) NOT NULL,
+  `ClientClaimsPrefix` varchar(200) DEFAULT NULL,
+  `PairWiseSubjectSalt` varchar(200) DEFAULT NULL,
+  `InitiateLoginUri` varchar(2000) DEFAULT NULL,
+  `UserSsoLifetime` int(11) DEFAULT NULL,
+  `UserCodeType` varchar(100) DEFAULT NULL,
+  `DeviceCodeLifetime` int(11) NOT NULL,
+  `CibaLifetime` int(11) DEFAULT NULL,
+  `PollingInterval` int(11) DEFAULT NULL,
+  `CoordinateLifetimeWithUserSession` tinyint(1) DEFAULT NULL,
+  `Created` datetime(6) NOT NULL,
+  `Updated` datetime(6) DEFAULT NULL,
+  `LastAccessed` datetime(6) DEFAULT NULL,
+  `NonEditable` tinyint(1) NOT NULL,
+  `PushedAuthorizationLifetime` int(11) DEFAULT NULL,
+  `RequirePushedAuthorization` tinyint(1) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_Clients_ClientId` (`ClientId`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ConfigurationEntries` (
+  `Key` varchar(95) NOT NULL,
+  `Value` longtext DEFAULT NULL,
+  PRIMARY KEY (`Key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `DataProtectionKeys` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `FriendlyName` longtext DEFAULT NULL,
+  `Xml` longtext DEFAULT NULL,
+  PRIMARY KEY (`Id`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `DeviceCodes` (
+  `UserCode` varchar(200) NOT NULL,
+  `DeviceCode` varchar(200) NOT NULL,
+  `SubjectId` varchar(200) DEFAULT NULL,
+  `SessionId` varchar(100) DEFAULT NULL,
+  `ClientId` varchar(200) NOT NULL,
+  `Description` varchar(200) DEFAULT NULL,
+  `CreationTime` datetime(6) NOT NULL,
+  `Expiration` datetime(6) NOT NULL,
+  `Data` longtext NOT NULL,
+  PRIMARY KEY (`UserCode`),
+  UNIQUE KEY `IX_DeviceCodes_DeviceCode` (`DeviceCode`),
+  KEY `IX_DeviceCodes_Expiration` (`Expiration`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `EnumClaimTypeAllowedValues` (
+  `ClaimTypeId` varchar(255) NOT NULL,
+  `Value` varchar(255) NOT NULL,
+  PRIMARY KEY (`ClaimTypeId`,`Value`),
+  CONSTRAINT `FK_EnumClaimTypeAllowedValues_AspNetClaimTypes_ClaimTypeId` FOREIGN KEY (`ClaimTypeId`) REFERENCES `AspNetClaimTypes` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ExtendedApiResources` (
+  `Id` varchar(127) NOT NULL,
+  `ApiResourceName` varchar(200) NOT NULL,
+  `NormalizedName` varchar(200) NOT NULL,
+  `Reserved` bit(1) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `ApiNameIndex` (`ApiResourceName`),
+  UNIQUE KEY `ApiResourceNameIndex` (`NormalizedName`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ExtendedClients` (
+  `Id` varchar(127) NOT NULL,
+  `ClientId` varchar(200) NOT NULL,
+  `Description` longtext DEFAULT NULL,
+  `NormalizedClientId` varchar(200) NOT NULL,
+  `NormalizedClientName` varchar(200) DEFAULT NULL,
+  `Reserved` bit(1) NOT NULL,
+  `ClientType` int(11) DEFAULT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IdIndex` (`ClientId`),
+  UNIQUE KEY `ClientIdIndex` (`NormalizedClientId`),
+  UNIQUE KEY `ClientNameIndex` (`NormalizedClientName`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ExtendedIdentityResources` (
+  `Id` varchar(127) NOT NULL,
+  `IdentityResourceName` varchar(200) NOT NULL,
+  `NormalizedName` varchar(200) NOT NULL,
+  `Reserved` bit(1) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IdentityNameIndex` (`IdentityResourceName`),
+  UNIQUE KEY `IdentityResourceNameIndex` (`NormalizedName`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `IdentityProviders` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Scheme` varchar(200) NOT NULL,
+  `DisplayName` varchar(200) DEFAULT NULL,
+  `Enabled` tinyint(1) NOT NULL,
+  `Type` varchar(20) NOT NULL,
+  `Properties` longtext DEFAULT NULL,
+  `Created` datetime(6) NOT NULL,
+  `Updated` datetime(6) DEFAULT NULL,
+  `LastAccessed` datetime(6) DEFAULT NULL,
+  `NonEditable` tinyint(1) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_IdentityProviders_Scheme` (`Scheme`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `IdentityResourceClaims` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `IdentityResourceId` int(11) NOT NULL,
+  `Type` varchar(200) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_IdentityResourceClaims_IdentityResourceId_Type` (`IdentityResourceId`,`Type`),
+  CONSTRAINT `FK_IdentityResourceClaims_IdentityResources_IdentityResourceId` FOREIGN KEY (`IdentityResourceId`) REFERENCES `IdentityResources` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=21 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `IdentityResourceProperties` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `IdentityResourceId` int(11) NOT NULL,
+  `Key` varchar(250) NOT NULL,
+  `Value` varchar(2000) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_IdentityResourceProperties_IdentityResourceId_Key` (`IdentityResourceId`,`Key`),
+  CONSTRAINT `FK_IdentityResourceProperties_IdentityResources_IdentityResourc~` FOREIGN KEY (`IdentityResourceId`) REFERENCES `IdentityResources` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `IdentityResources` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Enabled` tinyint(1) NOT NULL,
+  `Name` varchar(200) NOT NULL,
+  `DisplayName` varchar(200) DEFAULT NULL,
+  `Description` varchar(1000) DEFAULT NULL,
+  `Required` tinyint(1) NOT NULL,
+  `Emphasize` tinyint(1) NOT NULL,
+  `ShowInDiscoveryDocument` tinyint(1) NOT NULL,
+  `Created` datetime(6) NOT NULL,
+  `Updated` datetime(6) DEFAULT NULL,
+  `NonEditable` tinyint(1) NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_IdentityResources_Name` (`Name`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `Keys` (
+  `Id` varchar(255) NOT NULL,
+  `Version` int(11) NOT NULL,
+  `Created` datetime(6) NOT NULL,
+  `Use` varchar(255) DEFAULT NULL,
+  `Algorithm` varchar(100) NOT NULL,
+  `IsX509Certificate` tinyint(1) NOT NULL,
+  `DataProtected` tinyint(1) NOT NULL,
+  `Data` longtext NOT NULL,
+  PRIMARY KEY (`Id`),
+  KEY `IX_Keys_Use` (`Use`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `PersistedGrants` (
+  `Id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `Key` varchar(200) DEFAULT NULL,
+  `Type` varchar(50) NOT NULL,
+  `SubjectId` varchar(200) DEFAULT NULL,
+  `SessionId` varchar(100) DEFAULT NULL,
+  `ClientId` varchar(200) NOT NULL,
+  `Description` varchar(200) DEFAULT NULL,
+  `CreationTime` datetime(6) NOT NULL,
+  `Expiration` datetime(6) DEFAULT NULL,
+  `ConsumedTime` datetime(6) DEFAULT NULL,
+  `Data` longtext NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_PersistedGrants_Key` (`Key`),
+  KEY `IX_PersistedGrants_ConsumedTime` (`ConsumedTime`),
+  KEY `IX_PersistedGrants_Expiration` (`Expiration`),
+  KEY `IX_PersistedGrants_SubjectId_ClientId_Type` (`SubjectId`,`ClientId`,`Type`),
+  KEY `IX_PersistedGrants_SubjectId_SessionId_Type` (`SubjectId`,`SessionId`,`Type`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `PushedAuthorizationRequests` (
+  `Id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `ReferenceValueHash` varchar(64) NOT NULL,
+  `ExpiresAtUtc` datetime(6) NOT NULL,
+  `Parameters` longtext NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_PushedAuthorizationRequests_ReferenceValueHash` (`ReferenceValueHash`),
+  KEY `IX_PushedAuthorizationRequests_ExpiresAtUtc` (`ExpiresAtUtc`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `RelyingParties` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Realm` varchar(200) NOT NULL,
+  `TokenType` longtext DEFAULT NULL,
+  `SignatureAlgorithm` longtext DEFAULT NULL,
+  `DigestAlgorithm` longtext DEFAULT NULL,
+  `SamlNameIdentifierFormat` longtext DEFAULT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_RelyingParties_Realm` (`Realm`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `RelyingPartyClaimMappings` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `OriginalClaimType` varchar(250) NOT NULL,
+  `NewClaimType` varchar(250) NOT NULL,
+  `RelyingPartyId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  KEY `IX_RelyingPartyClaimMappings_RelyingPartyId` (`RelyingPartyId`),
+  CONSTRAINT `FK_RelyingPartyClaimMappings_RelyingParties_RelyingPartyId` FOREIGN KEY (`RelyingPartyId`) REFERENCES `RelyingParties` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `SamlArtifacts` (
+  `Key` varchar(200) NOT NULL,
+  `EntityId` varchar(200) NOT NULL,
+  `MessageType` varchar(50) NOT NULL,
+  `Message` longtext NOT NULL,
+  `CreationTime` datetime(6) NOT NULL,
+  `Expiration` datetime(6) NOT NULL,
+  PRIMARY KEY (`Key`),
+  KEY `IX_SamlArtifacts_Expiration` (`Expiration`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ServerSideSessions` (
+  `Id` bigint(20) NOT NULL AUTO_INCREMENT,
+  `Key` varchar(100) NOT NULL,
+  `Scheme` varchar(100) NOT NULL,
+  `SubjectId` varchar(100) NOT NULL,
+  `SessionId` varchar(100) DEFAULT NULL,
+  `DisplayName` varchar(100) DEFAULT NULL,
+  `Created` datetime(6) NOT NULL,
+  `Renewed` datetime(6) NOT NULL,
+  `Expires` datetime(6) DEFAULT NULL,
+  `Data` longtext NOT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ServerSideSessions_Key` (`Key`),
+  KEY `IX_ServerSideSessions_DisplayName` (`DisplayName`),
+  KEY `IX_ServerSideSessions_Expires` (`Expires`),
+  KEY `IX_ServerSideSessions_SessionId` (`SessionId`),
+  KEY `IX_ServerSideSessions_SubjectId` (`SubjectId`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ServiceProviderArtifactResolutionServices` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Binding` varchar(2000) NOT NULL,
+  `Location` varchar(2000) NOT NULL,
+  `Index` int(11) NOT NULL,
+  `IsDefault` tinyint(1) NOT NULL,
+  `ServiceProviderId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  KEY `IX_ServiceProviderArtifactResolutionServices_ServiceProviderId` (`ServiceProviderId`),
+  CONSTRAINT `FK_ServiceProviderArtifactResolutionServices_ServiceProviders_S~` FOREIGN KEY (`ServiceProviderId`) REFERENCES `ServiceProviders` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ServiceProviderAssertionConsumerServices` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Binding` varchar(2000) NOT NULL,
+  `Location` varchar(2000) NOT NULL,
+  `Index` int(11) NOT NULL,
+  `IsDefault` tinyint(1) NOT NULL,
+  `ServiceProviderId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  KEY `IX_ServiceProviderAssertionConsumerServices_ServiceProviderId` (`ServiceProviderId`),
+  CONSTRAINT `FK_ServiceProviderAssertionConsumerServices_ServiceProviders_Se~` FOREIGN KEY (`ServiceProviderId`) REFERENCES `ServiceProviders` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ServiceProviderClaimMappings` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `OriginalClaimType` varchar(250) NOT NULL,
+  `NewClaimType` varchar(250) NOT NULL,
+  `ServiceProviderId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  KEY `IX_ServiceProviderClaimMappings_ServiceProviderId` (`ServiceProviderId`),
+  CONSTRAINT `FK_ServiceProviderClaimMappings_ServiceProviders_ServiceProvide~` FOREIGN KEY (`ServiceProviderId`) REFERENCES `ServiceProviders` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ServiceProviderSignCertificates` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Certificate` longblob NOT NULL,
+  `ServiceProviderId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  KEY `IX_ServiceProviderSignCertificates_ServiceProviderId` (`ServiceProviderId`),
+  CONSTRAINT `FK_ServiceProviderSignCertificates_ServiceProviders_ServiceProv~` FOREIGN KEY (`ServiceProviderId`) REFERENCES `ServiceProviders` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ServiceProviderSingleLogoutServices` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `Binding` varchar(2000) NOT NULL,
+  `Location` varchar(2000) NOT NULL,
+  `Index` int(11) NOT NULL,
+  `IsDefault` tinyint(1) NOT NULL,
+  `ServiceProviderId` int(11) NOT NULL,
+  PRIMARY KEY (`Id`),
+  KEY `IX_ServiceProviderSingleLogoutServices_ServiceProviderId` (`ServiceProviderId`),
+  CONSTRAINT `FK_ServiceProviderSingleLogoutServices_ServiceProviders_Service~` FOREIGN KEY (`ServiceProviderId`) REFERENCES `ServiceProviders` (`Id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `ServiceProviders` (
+  `Id` int(11) NOT NULL AUTO_INCREMENT,
+  `EntityId` varchar(200) NOT NULL,
+  `EncryptionCertificate` longblob DEFAULT NULL,
+  `SignAssertions` tinyint(1) NOT NULL,
+  `EncryptAssertions` tinyint(1) NOT NULL,
+  `RequireSamlMessageDestination` tinyint(1) NOT NULL,
+  `AllowIdpInitiatedSso` tinyint(1) NOT NULL DEFAULT 0,
+  `RequireAuthenticationRequestsSigned` tinyint(1) DEFAULT NULL,
+  `ArtifactDeliveryBindingType` longtext DEFAULT NULL,
+  `NameIdentifierFormat` longtext DEFAULT NULL,
+  `RequireSignedArtifactResolveRequests` tinyint(1) DEFAULT NULL,
+  `RequireSignedArtifactResponses` tinyint(1) DEFAULT NULL,
+  PRIMARY KEY (`Id`),
+  UNIQUE KEY `IX_ServiceProviders_EntityId` (`EntityId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8mb4 */;
+CREATE TABLE `__EFMigrationsHistory` (
+  `MigrationId` varchar(150) NOT NULL,
+  `ProductVersion` varchar(32) NOT NULL,
+  PRIMARY KEY (`MigrationId`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_uca1400_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*M!100616 SET NOTE_VERBOSITY=@OLD_NOTE_VERBOSITY */;
+
+
+-- -----------------------------------------------------------------------------
+-- 3. EF Core Migrations History
+-- -----------------------------------------------------------------------------
+DELETE FROM `__EFMigrationsHistory`;
+INSERT INTO `__EFMigrationsHistory` (`MigrationId`, `ProductVersion`) VALUES
+('20171026082841_InitialMySqlExtendedConfigurationDbMigration', '9.0.8'),
+('20180725083018_ConfigurationEntries', '9.0.8'),
+('20181205164929_ExtendedDataMigration2.3', '9.0.8'),
+('20181220155839_InitalMySqlAuditDbMigration', '9.0.8'),
+('20190305133042_MySqlSaml2PInitial', '9.0.8'),
+('20190305133541_MySqlWsfederationInitial', '9.0.8'),
+('20190321122253_ClientType', '9.0.8'),
+('20200225105251_Added AllowIdpInitiated', '9.0.8'),
+('20200626132027_InitialMySqlDataProtectionKeyMigration', '9.0.8'),
+('20200914074711_RskSamlV3', '9.0.8'),
+('20220112145727_RskSamlPackageUpdate', '9.0.8'),
+('20220114164323_MySqlSamlArtifactInitialMigration', '9.0.8'),
+('20250716072259_ConfigurationDbMigration', '9.0.9'),
+('20250716072320_PersistedGrantDbMigration', '9.0.9'),
+('20250716073046_ApplicationDbMigration', '9.0.9'),
+('20260910123954_AddApplicationRoleDescription', '9.0.9'),
+('20260910124130_AddApplicationRoleReserved', '9.0.9'),
+('20260910124613_IdentityExpressSchema', '9.0.9');
+
+-- -----------------------------------------------------------------------------
+-- 4. Application & Seed Data
+-- -----------------------------------------------------------------------------
+/*M!999999\- enable the sandbox mode */ 
+
+/*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
+/*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
+/*!40101 SET @OLD_COLLATION_CONNECTION=@@COLLATION_CONNECTION */;
+/*!40101 SET NAMES utf8mb4 */;
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*M!100616 SET @OLD_NOTE_VERBOSITY=@@NOTE_VERBOSITY, NOTE_VERBOSITY=0 */;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ApiResources` WRITE;
+/*!40000 ALTER TABLE `ApiResources` DISABLE KEYS */;
+INSERT INTO `ApiResources` (`Id`, `Description`, `DisplayName`, `Enabled`, `Name`, `Created`, `LastAccessed`, `NonEditable`, `Updated`, `AllowedAccessTokenSigningAlgorithms`, `ShowInDiscoveryDocument`, `RequireResourceIndicator`) VALUES (1,'API backing the Admin UI Product','Admin API',0x01,'admin_api','2025-07-16 10:04:27.013370',NULL,1,NULL,'',0x01,0),
+(2,'Access to the Webhooks for admin UI','Admin UI Webhooks',0x01,'admin_ui_webhooks','2025-07-16 10:04:27.037963',NULL,0,NULL,'',0x01,0),
+(3,'','ACS API Access',0x01,'acs.api','2025-07-16 10:15:03.552070',NULL,0,'2025-07-16 10:16:02.109147','',0x01,0);
+/*!40000 ALTER TABLE `ApiResources` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ApiResourceClaims` WRITE;
+/*!40000 ALTER TABLE `ApiResourceClaims` DISABLE KEYS */;
+INSERT INTO `ApiResourceClaims` (`Id`, `Type`, `ApiResourceId`) VALUES (3,'role',3);
+/*!40000 ALTER TABLE `ApiResourceClaims` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ApiResourceProperties` WRITE;
+/*!40000 ALTER TABLE `ApiResourceProperties` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ApiResourceProperties` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ApiResourceScopes` WRITE;
+/*!40000 ALTER TABLE `ApiResourceScopes` DISABLE KEYS */;
+INSERT INTO `ApiResourceScopes` (`Id`, `Scope`, `ApiResourceId`) VALUES (1,'admin_api',1),
+(2,'admin_api_readonly',1),
+(3,'admin_ui_public',1),
+(4,'admin_ui_webhooks',2),
+(8,'acs.api',3),
+(9,'acs.api.read',3),
+(10,'acs.api.write',3);
+/*!40000 ALTER TABLE `ApiResourceScopes` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ApiScopes` WRITE;
+/*!40000 ALTER TABLE `ApiScopes` DISABLE KEYS */;
+INSERT INTO `ApiScopes` (`Id`, `Description`, `DisplayName`, `Emphasize`, `Name`, `Required`, `ShowInDiscoveryDocument`, `Enabled`, `Created`, `LastAccessed`, `NonEditable`, `Updated`) VALUES (1,'Full access to API backing the Admin UI Product','Admin API',0x00,'admin_api',0x01,0x00,0x01,'2025-07-16 10:04:26.995585',NULL,0,NULL),
+(2,'Read only access to API backing the Admin UI Product','Admin API Read Only',0x00,'admin_api_readonly',0x01,0x00,0x01,'2025-07-16 10:04:27.012901',NULL,0,NULL),
+(3,'Access to the Webhooks for admin UI','Admin UI Webhooks',0x00,'admin_ui_webhooks',0x00,0x00,0x01,'2025-07-16 10:04:27.037783',NULL,0,NULL),
+(4,'ACS API Access - Full Access','ACS API Access',0x00,'acs.api',0x00,0x01,0x01,'2025-07-16 10:15:03.551123',NULL,0,NULL),
+(5,'ACS API Read Scope','ACS API Read Scope',0x00,'acs.api.read',0x00,0x01,0x01,'2025-07-16 10:15:43.373199',NULL,0,NULL),
+(6,'ACS API Write Scope','ACS API Write Scope',0x00,'acs.api.write',0x00,0x01,0x01,'2025-07-16 10:16:02.106004',NULL,0,NULL);
+/*!40000 ALTER TABLE `ApiScopes` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ApiScopeClaims` WRITE;
+/*!40000 ALTER TABLE `ApiScopeClaims` DISABLE KEYS */;
+INSERT INTO `ApiScopeClaims` (`Id`, `ScopeId`, `Type`) VALUES (2,1,'name'),
+(1,1,'role'),
+(4,2,'name'),
+(3,2,'role');
+/*!40000 ALTER TABLE `ApiScopeClaims` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ApiScopeProperties` WRITE;
+/*!40000 ALTER TABLE `ApiScopeProperties` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ApiScopeProperties` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `IdentityResources` WRITE;
+/*!40000 ALTER TABLE `IdentityResources` DISABLE KEYS */;
+INSERT INTO `IdentityResources` (`Id`, `Description`, `DisplayName`, `Emphasize`, `Enabled`, `Name`, `Required`, `ShowInDiscoveryDocument`, `Created`, `NonEditable`, `Updated`) VALUES (1,NULL,'Your user identifier',0x00,0x01,'openid',0x01,0x01,'2025-07-16 10:04:26.934611',1,NULL),
+(2,'Your user profile information (first name, last name, etc.)','User profile',0x01,0x01,'profile',0x00,0x01,'2025-07-16 10:04:26.975337',1,NULL),
+(3,'Identity data required to access AdminUI','Admin UI Profile',0x00,0x01,'admin_ui_profile',0x01,0x00,'2025-07-16 10:04:27.035884',0,NULL),
+(4,'','ACS Identity Profile',0x00,0x01,'acs.identity',0x00,0x01,'2025-07-16 10:14:04.717275',0,NULL);
+/*!40000 ALTER TABLE `IdentityResources` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `IdentityResourceClaims` WRITE;
+/*!40000 ALTER TABLE `IdentityResourceClaims` DISABLE KEYS */;
+INSERT INTO `IdentityResourceClaims` (`Id`, `Type`, `IdentityResourceId`) VALUES (1,'sub',1),
+(12,'birthdate',2),
+(3,'family_name',2),
+(11,'gender',2),
+(4,'given_name',2),
+(14,'locale',2),
+(5,'middle_name',2),
+(2,'name',2),
+(6,'nickname',2),
+(9,'picture',2),
+(7,'preferred_username',2),
+(8,'profile',2),
+(15,'updated_at',2),
+(10,'website',2),
+(13,'zoneinfo',2),
+(17,'email',3),
+(20,'given_name',3),
+(19,'name',3),
+(16,'openid',3),
+(18,'role',3),
+(21,'email',4),
+(22,'given_name',4),
+(23,'name',4),
+(24,'role',4);
+/*!40000 ALTER TABLE `IdentityResourceClaims` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `IdentityResourceProperties` WRITE;
+/*!40000 ALTER TABLE `IdentityResourceProperties` DISABLE KEYS */;
+/*!40000 ALTER TABLE `IdentityResourceProperties` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ExtendedApiResources` WRITE;
+/*!40000 ALTER TABLE `ExtendedApiResources` DISABLE KEYS */;
+INSERT INTO `ExtendedApiResources` (`Id`, `ApiResourceName`, `NormalizedName`, `Reserved`) VALUES ('1898b341-ea75-4c0d-a233-b4ae2f1c18a1','admin_api','ADMIN_API',0x01),
+('b1031679-f2bd-4107-8ed3-11001b627cbf','admin_ui_webhooks','ADMIN_UI_WEBHOOKS',0x00),
+('dd5b05bd-4d6b-4345-92fd-020687bc9b0d','acs.api','ACS.API',0x00);
+/*!40000 ALTER TABLE `ExtendedApiResources` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ExtendedIdentityResources` WRITE;
+/*!40000 ALTER TABLE `ExtendedIdentityResources` DISABLE KEYS */;
+INSERT INTO `ExtendedIdentityResources` (`Id`, `IdentityResourceName`, `NormalizedName`, `Reserved`) VALUES ('3d6347c7-d981-4f32-9b0a-5dfac2318725','profile','PROFILE',0x01),
+('51cc7f1e-ef45-42ba-94c8-73c8aa69b4d3','openid','OPENID',0x00),
+('7e2043bf-b9b2-45a8-bc5f-2ac774212494','admin_ui_profile','ADMIN_UI_PROFILE',0x00),
+('7f63c20b-b1f0-4393-b3da-93377ee22f78','acs.identity','ACS.IDENTITY',0x00);
+/*!40000 ALTER TABLE `ExtendedIdentityResources` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ExtendedClients` WRITE;
+/*!40000 ALTER TABLE `ExtendedClients` DISABLE KEYS */;
+INSERT INTO `ExtendedClients` (`Id`, `ClientId`, `Description`, `NormalizedClientId`, `NormalizedClientName`, `Reserved`, `ClientType`) VALUES ('d611b0a2-cc82-4d29-9ba0-dce28b1be255','acsstats','','ACSSTATS','ACS STATISTICS APPLICATION',0x00,9),
+('e65801b4-a53d-44ef-9cb5-326bef657c71','admin_ui','IdentityExpress Admin UI','ADMIN_UI','ADMIN UI',0x01,0);
+/*!40000 ALTER TABLE `ExtendedClients` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `Clients` WRITE;
+/*!40000 ALTER TABLE `Clients` DISABLE KEYS */;
+INSERT INTO `Clients` (`Id`, `AbsoluteRefreshTokenLifetime`, `AccessTokenLifetime`, `AccessTokenType`, `AllowAccessTokensViaBrowser`, `AllowOfflineAccess`, `AllowPlainTextPkce`, `AllowRememberConsent`, `AlwaysIncludeUserClaimsInIdToken`, `AlwaysSendClientClaims`, `AuthorizationCodeLifetime`, `BackChannelLogoutSessionRequired`, `BackChannelLogoutUri`, `ClientClaimsPrefix`, `ClientId`, `ClientName`, `ClientUri`, `ConsentLifetime`, `Description`, `EnableLocalLogin`, `Enabled`, `FrontChannelLogoutSessionRequired`, `FrontChannelLogoutUri`, `IdentityTokenLifetime`, `IncludeJwtId`, `LogoUri`, `PairWiseSubjectSalt`, `ProtocolType`, `RefreshTokenExpiration`, `RefreshTokenUsage`, `RequireClientSecret`, `RequireConsent`, `RequirePkce`, `SlidingRefreshTokenLifetime`, `UpdateAccessTokenClaimsOnRefresh`, `Created`, `DeviceCodeLifetime`, `LastAccessed`, `NonEditable`, `Updated`, `UserCodeType`, `UserSsoLifetime`, `AllowedIdentityTokenSigningAlgorithms`, `RequireRequestObject`, `CibaLifetime`, `PollingInterval`, `CoordinateLifetimeWithUserSession`, `DPoPClockSkew`, `DPoPValidationMode`, `InitiateLoginUri`, `RequireDPoP`, `PushedAuthorizationLifetime`, `RequirePushedAuthorization`) VALUES (1,86400,3600,0,0x00,0x01,0x00,0x01,0x00,0x00,300,0x01,NULL,NULL,'admin_ui','Admin UI',NULL,NULL,'IdentityExpress Admin UI',0x01,0x01,0x01,NULL,300,0x01,NULL,NULL,'oidc',1,0,0x01,0x00,0x01,1296000,0x00,'2025-07-16 10:04:27.099790',300,'0001-01-01 00:00:00.000000',1,'0001-01-01 00:00:00.000000',NULL,NULL,'',0x00,NULL,NULL,NULL,'00:05:00.000000',1,NULL,0,NULL,0),
+(2,2592000,3600,0,0x00,0x01,0x00,0x01,0x00,0x00,300,0x01,NULL,NULL,'acsstats','ACS Statistics Application','{{WEB_URL}}',NULL,'',0x01,0x01,0x01,NULL,300,0x01,'{{WEB_URL}}/KnowledgeSpikeLogo.png',NULL,'oidc',1,0,0x01,0x00,0x01,1296000,0x00,'2025-07-16 10:22:01.920316',300,'0001-01-01 00:00:00.000000',0,'2026-04-01 16:13:03.453003',NULL,NULL,'',0x00,NULL,NULL,NULL,'00:05:00.000000',1,NULL,0,NULL,0);
+/*!40000 ALTER TABLE `Clients` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ClientGrantTypes` WRITE;
+/*!40000 ALTER TABLE `ClientGrantTypes` DISABLE KEYS */;
+INSERT INTO `ClientGrantTypes` (`Id`, `ClientId`, `GrantType`) VALUES (1,1,'authorization_code'),
+(21,2,'authorization_code'),
+(22,2,'client_credentials');
+/*!40000 ALTER TABLE `ClientGrantTypes` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ClientScopes` WRITE;
+/*!40000 ALTER TABLE `ClientScopes` DISABLE KEYS */;
+INSERT INTO `ClientScopes` (`Id`, `ClientId`, `Scope`) VALUES (2,1,'admin_api'),
+(3,1,'admin_ui_profile'),
+(1,1,'openid'),
+(70,2,'acs.api'),
+(71,2,'acs.api.read'),
+(72,2,'acs.api.write'),
+(73,2,'acs.identity'),
+(74,2,'openid'),
+(75,2,'profile');
+/*!40000 ALTER TABLE `ClientScopes` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ClientClaims` WRITE;
+/*!40000 ALTER TABLE `ClientClaims` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ClientClaims` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ClientProperties` WRITE;
+/*!40000 ALTER TABLE `ClientProperties` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ClientProperties` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ClientIdPRestrictions` WRITE;
+/*!40000 ALTER TABLE `ClientIdPRestrictions` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ClientIdPRestrictions` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ClientSecrets` WRITE;
+/*!40000 ALTER TABLE `ClientSecrets` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ClientSecrets` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ClientRedirectUris` WRITE;
+/*!40000 ALTER TABLE `ClientRedirectUris` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ClientRedirectUris` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ClientPostLogoutRedirectUris` WRITE;
+/*!40000 ALTER TABLE `ClientPostLogoutRedirectUris` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ClientPostLogoutRedirectUris` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ClientCorsOrigins` WRITE;
+/*!40000 ALTER TABLE `ClientCorsOrigins` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ClientCorsOrigins` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `AspNetUsers` WRITE;
+/*!40000 ALTER TABLE `AspNetUsers` DISABLE KEYS */;
+INSERT INTO `AspNetUsers` (`Id`, `AccessFailedCount`, `ConcurrencyStamp`, `Email`, `EmailConfirmed`, `FirstName`, `IsBlocked`, `IsDeleted`, `LastName`, `LockoutEnabled`, `LockoutEnd`, `NormalizedEmail`, `NormalizedUserName`, `PasswordHash`, `PhoneNumber`, `PhoneNumberConfirmed`, `SecurityStamp`, `TwoFactorEnabled`, `UserName`, `NormalizedFirstName`, `NormalizedLastName`) VALUES ('010ecd22-a58a-41c2-93b8-7de3e31dfb94',0,'6db83c73-33a5-4c31-b34e-2ed42ae37ddb','kevin@rocksolidknowledge.com',0x01,'Kevin',0x00,0x00,'Jones',0x01,NULL,'KEVIN@ROCKSOLIDKNOWLEDGE.COM','KEVIN@ROCKSOLIDKNOWLEDGE.COM','AQAAAAIAAYagAAAAEO0EZGRwQ4Zi+sImPgAhniICUE/DHYA0lwS5W+/5wjhTC6Hv9Z0TSxZyGOw6qX/H9A==',NULL,0x00,'ET4HZDR3SDSPUPC2ESLFLBCHHUFYFAE4',0x00,'kevin@rocksolidknowledge.com','KEVIN','JONES'),
+('1b033686-202b-4970-9002-70cb3f1593af',0,'b248a03c-df4a-45dc-9640-14dacb9f6fd9','kevin@knowledgespike.com',0x01,'Kevin',0x00,0x00,'Jones',0x01,NULL,'KEVIN@KNOWLEDGESPIKE.COM','KEVIN@KNOWLEDGESPIKE.COM','AQAAAAIAAYagAAAAEN5Fy7FVKSUHxvHBgkXlx89HarQwemREvx1no109FRr5HsS+VTxQ4ZdkLe/SsP/LsQ==',NULL,0x00,'YRF643JJDJAKX5SJMETMKPPM4EXSBRBF',0x00,'kevin@knowledgespike.com','KEVIN','JONES');
+/*!40000 ALTER TABLE `AspNetUsers` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `AspNetRoles` WRITE;
+/*!40000 ALTER TABLE `AspNetRoles` DISABLE KEYS */;
+INSERT INTO `AspNetRoles` (`Id`, `ConcurrencyStamp`, `Description`, `Name`, `NormalizedName`, `Reserved`) VALUES ('7e071583-f7bd-44e8-b3e2-4fbcb2b8bb84','5d2c1b5d-997b-4aa2-8562-d318e03360eb','ACS Stats Writer','ACS.Stats.Writer','ACS.STATS.WRITER',0x00),
+('ca6dc324-71a3-488e-af56-d54d10d860a5','908f7735-f38a-4bf8-891b-f2aafd82fc33','ACS Stats Administrator','ACS.Stats.Admin','ACS.STATS.ADMIN',0x00),
+('df0bf8c2-6406-48a2-b3ec-ace315657563','9573b69d-c2b3-47dc-adec-3cfce5ef637b','Administrator for AdminUI','AdminUI Administrator','ADMINUI ADMINISTRATOR',0x01),
+('ee8db228-191d-4814-aa94-65769fe5cba3','3ee570be-e0a2-4c02-8839-4db7b84efc6b','ACS Stats Reader','ACS.Stats.Reader','ACS.STATS.READER',0x00);
+/*!40000 ALTER TABLE `AspNetRoles` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `AspNetUserRoles` WRITE;
+/*!40000 ALTER TABLE `AspNetUserRoles` DISABLE KEYS */;
+INSERT INTO `AspNetUserRoles` (`UserId`, `RoleId`) VALUES ('1b033686-202b-4970-9002-70cb3f1593af','7e071583-f7bd-44e8-b3e2-4fbcb2b8bb84'),
+('1b033686-202b-4970-9002-70cb3f1593af','ca6dc324-71a3-488e-af56-d54d10d860a5'),
+('1b033686-202b-4970-9002-70cb3f1593af','df0bf8c2-6406-48a2-b3ec-ace315657563'),
+('010ecd22-a58a-41c2-93b8-7de3e31dfb94','ee8db228-191d-4814-aa94-65769fe5cba3'),
+('1b033686-202b-4970-9002-70cb3f1593af','ee8db228-191d-4814-aa94-65769fe5cba3');
+/*!40000 ALTER TABLE `AspNetUserRoles` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `AspNetRoleClaims` WRITE;
+/*!40000 ALTER TABLE `AspNetRoleClaims` DISABLE KEYS */;
+/*!40000 ALTER TABLE `AspNetRoleClaims` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `AspNetUserClaims` WRITE;
+/*!40000 ALTER TABLE `AspNetUserClaims` DISABLE KEYS */;
+/*!40000 ALTER TABLE `AspNetUserClaims` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `AspNetUserLogins` WRITE;
+/*!40000 ALTER TABLE `AspNetUserLogins` DISABLE KEYS */;
+/*!40000 ALTER TABLE `AspNetUserLogins` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `AspNetUserTokens` WRITE;
+/*!40000 ALTER TABLE `AspNetUserTokens` DISABLE KEYS */;
+/*!40000 ALTER TABLE `AspNetUserTokens` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
+LOCK TABLES `ConfigurationEntries` WRITE;
+/*!40000 ALTER TABLE `ConfigurationEntries` DISABLE KEYS */;
+INSERT INTO `ConfigurationEntries` (`Key`, `Value`) VALUES ('bootstrapconfig','{\"PreventDefaultUserBootstrap\":true}'),
+('policy','{\"PolicyClaims\":[],\"Version\":\"07/16/2025 10:04:26\",\"ResourceType\":\"accessPolicy\",\"ResourceIdentifier\":\"07/16/2025 10:04:26\"}'),
+('webhooks','{\"ClientId\":null,\"ClientSecret\":null,\"Webhooks\":{\"MfaReset\":{\"Url\":\"\",\"ScopeName\":\"\",\"Enabled\":false},\"PasswordReset\":{\"Url\":\"\",\"ScopeName\":\"\",\"Enabled\":false},\"UserRegistration\":{\"Url\":\"\",\"ScopeName\":\"\",\"Enabled\":false},\"ServerSideSessionDelete\":{\"Url\":\"\",\"ScopeName\":\"\",\"Enabled\":false}},\"ResourceType\":\"webhookConfiguration\",\"ResourceIdentifier\":null}');
+/*!40000 ALTER TABLE `ConfigurationEntries` ENABLE KEYS */;
+UNLOCK TABLES;
+COMMIT;
+SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*M!100616 SET NOTE_VERBOSITY=@OLD_NOTE_VERBOSITY */;
+
+-- -----------------------------------------------------------------------------
+-- 5. Parameterized Client Credentials & URIs
+-- -----------------------------------------------------------------------------
+DELETE FROM `ClientSecrets`;
+INSERT INTO `ClientSecrets` (`Id`, `ClientId`, `Description`, `Value`, `Expiration`, `Type`, `Created`) VALUES
+(1, 1, 'AdminUI Client Secret', '{{ADMINUI_SECRET_HASH}}', NULL, 'SharedSecret', NOW()),
+(2, 2, 'ACS Web Client Secret', '{{ACS_SECRET_HASH}}', NULL, 'SharedSecret', NOW());
+
+DELETE FROM `ClientRedirectUris`;
+INSERT INTO `ClientRedirectUris` (`Id`, `ClientId`, `RedirectUri`) VALUES
+(1, 1, '{{ADMINUI_URL}}/signin-oidc'),
+(2, 2, '{{WEB_URL}}/signin-oidc');
+
+DELETE FROM `ClientPostLogoutRedirectUris`;
+INSERT INTO `ClientPostLogoutRedirectUris` (`Id`, `ClientId`, `PostLogoutRedirectUri`) VALUES
+(1, 1, '{{ADMINUI_URL}}'),
+(2, 1, '{{ADMINUI_URL}}/signout-callback-oidc'),
+(3, 2, '{{WEB_URL}}/signout-callback-oidc'),
+(4, 2, '{{WEB_URL}}/');
+
+DELETE FROM `ClientCorsOrigins`;
+INSERT INTO `ClientCorsOrigins` (`Id`, `ClientId`, `Origin`) VALUES
+(1, 1, '{{ADMINUI_URL}}'),
+(2, 2, '{{WEB_URL}}');
+
+SET FOREIGN_KEY_CHECKS=1;

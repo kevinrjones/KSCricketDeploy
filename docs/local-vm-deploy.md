@@ -47,7 +47,11 @@ The MariaDB container hosts all application databases on one instance:
 3. **`cricket`** — Used for cricket statistics and upcoming applications.
 
 **Automatic Initialization:**  
-In the old Docker Swarm setup, SQL scripts were mounted into `/docker-entrypoint-initdb.d`. We use that exact same automatic pattern here: the script in `mariadb/init/01-init-databases.sh` is mounted into `/docker-entrypoint-initdb.d` inside MariaDB. When MariaDB starts up for the first time with a fresh volume, it automatically runs this script to create all three databases and configure their users and permissions. You don't need to manually run any SQL to get started!
+In the old Docker Swarm setup, SQL scripts were mounted into `/docker-entrypoint-initdb.d`. We use that exact same automatic pattern here:
+1. `mariadb/init/01-init-databases.sh`: Creates all three databases (`identity`, `cricketarchive`, `cricket`) and configures their application users and permissions.
+2. `mariadb/init/02-init-identity-data.sh`: Automatically applies the clean identity baseline data (`mariadb/init/identity-baseline.sql.template`), substituting VM hostnames and hashed client secrets for AdminUI and ACS Web.
+
+When MariaDB starts up for the first time with a fresh volume, it automatically runs these scripts. You don't need to manually run any SQL to get started! If you ever need to re-seed an existing container, you can also run `./scripts/import-identity-db.sh local-vm`.
 
 ---
 
@@ -262,11 +266,13 @@ Because your VM is on a local private IP, we use a local Certificate Authority (
 2. This produces the following files in `certs/local-vm/`:
    - `dev-ca.crt` — The Root CA public certificate. **You will install this on your laptop.**
    - `dev-ca.key` — The private key for your CA.
+   - `cacerts` — The Java truststore containing `dev-ca.crt` (mounted into JVM containers `acs-web` and `acs-api`).
    - `server.crt` — The SSL certificate configured for:
      - `ids-vm.knowledgespike.cricket`
      - `adminui-vm.knowledgespike.cricket`
      - `web-vm.knowledgespike.cricket`
      - `api-vm.knowledgespike.cricket`
+     - `api-beta.knowledgespike.cricket` (used by `acs-web` internal BFF proxy routes in `beta` mode)
    - `server.key` — The private key for nginx TLS termination.
 
 ---
@@ -296,26 +302,42 @@ It should reply from `<VM_IP>`.
 
 ### Step 7.2: Trust `dev-ca.crt` on your laptop
 
-Copy `dev-ca.crt` from the VM to your laptop:
+Because the VM uses self-signed TLS certificates issued by our local development CA, client browsers (Chrome, Safari, Edge) and CLI tools on your laptop will display **"Your connection is not private"** (`NET::ERR_CERT_AUTHORITY_INVALID`) until you install and trust `dev-ca.crt`.
+
+If you are running from this repository on your laptop (or using a shared folder), the root certificate is already located at:
+```text
+certs/local-vm/dev-ca.crt
+```
+*(If you need to copy it from a remote VM, run: `scp <user>@<VM_IP>:~/acs-deploy/certs/local-vm/dev-ca.crt certs/local-vm/dev-ca.crt`)*
+
+#### On macOS:
+
+**Option A: Terminal Command (Fastest)**
+From the project root on your laptop, run:
 ```bash
-# Run this on your laptop:
-scp <user>@<VM_IP>:~/acs-deploy/certs/local-vm/dev-ca.crt ~/Desktop/dev-ca.crt
+sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain certs/local-vm/dev-ca.crt
 ```
 
-**On macOS:**
-1. Open **Keychain Access** app.
-2. Drag `~/Desktop/dev-ca.crt` into the **System** or **login** keychain.
-3. Double-click **KnowledgeSpike Local VM Dev CA**.
-4. Expand **Trust** and set **When using this certificate** to **Always Trust**.
+**Option B: Keychain Access GUI**
+1. Open the certificate in Keychain Access:
+   ```bash
+   open certs/local-vm/dev-ca.crt
+   ```
+2. Select the **System** (or **login**) keychain.
+3. Locate **KnowledgeSpike local-vm Dev CA** in the list and double-click it.
+4. Expand the **Trust** section and set **When using this certificate** to **Always Trust**.
 5. Close the window and authenticate with your macOS password.
 
-**On Linux (laptop):**
+> **CRITICAL — Restart Your Browser:**
+> Fully quit (`Cmd + Q`) and relaunch your browser (Chrome, Safari, Edge, Brave). Browsers cache SSL certificate validation chains in memory; without a full restart, they will continue to show **"Your connection is not private"** even after the certificate is trusted.
+
+#### On Linux (laptop):
 ```bash
-sudo cp ~/Desktop/dev-ca.crt /usr/local/share/ca-certificates/dev-ca.crt
+sudo cp certs/local-vm/dev-ca.crt /usr/local/share/ca-certificates/dev-ca.crt
 sudo update-ca-certificates
 ```
 
-Now your laptop browsers (Safari, Chrome) and `curl` will trust the VM's HTTPS certificates without any security warnings.
+Now your laptop browsers and `curl` will trust the VM's HTTPS endpoints (`https://ids-vm...`, `https://web-vm...`, `https://adminui-vm...`, `https://api-vm...`) with a secure padlock.
 
 ---
 
@@ -377,6 +399,74 @@ curl -fsS -o /dev/null https://web-vm.knowledgespike.cricket/ && echo "ACS Web O
 
 ---
 
+## Step 10: Import Cricket Data into MariaDB
+
+The `cricketarchive` database contains all matches, players, teams, grounds, and statistics used by the ACS API (`acs-api`).
+
+### Option A: Direct Command Line (Run on the VM)
+
+From your **VM terminal**, stream the SQL dump into the running MariaDB container using `docker compose`:
+
+```bash
+cd ~/acs-deploy
+
+# If using uncompressed SQL (e.g. from Parallels shared folder):
+docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
+  'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive' \
+  < /media/psf/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql
+
+# Or if using a gzipped dump:
+gunzip -c /path/to/cricketarchive-upload.sql.gz | docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
+  'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive'
+```
+
+*Note: Alternatively, you can use the direct container name:*
+```bash
+docker exec -i acs-local-vm-mariadb-1 sh -c \
+  'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive' \
+  < /media/psf/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql
+```
+
+### Option B: Using the Helper Script
+
+A helper script is included in `scripts/import-cricket-data.sh` that dynamically optimizes MariaDB buffer sizes, auto-detects plain or gzipped files, and displays row count verification on completion:
+
+```bash
+cd ~/acs-deploy
+chmod +x scripts/import-cricket-data.sh
+
+# Run inside the VM (will auto-detect default backup path if omitted):
+./scripts/import-cricket-data.sh /media/psf/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql local-vm
+```
+
+You can also run the import script directly from your **laptop** targeting the VM over SSH:
+```bash
+./scripts/import-cricket-data.sh ~/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql local-vm
+```
+
+### Step 10.1: Verify Cricket Data Import
+
+Verify the imported tables and record counts from the VM:
+
+```bash
+cd ~/acs-deploy/environments/local-vm
+docker compose exec mariadb sh -c '
+  mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" -e "
+    SELECT count(*) AS total_tables FROM information_schema.tables WHERE table_schema=\"cricketarchive\";
+    SELECT \"Matches\" AS tbl, count(*) AS count FROM cricketarchive.Matches UNION ALL
+    SELECT \"Players\", count(*) FROM cricketarchive.Players UNION ALL
+    SELECT \"Teams\", count(*) FROM cricketarchive.Teams;
+  "
+'
+```
+
+And test the ACS API health route:
+```bash
+curl -fsS https://api-vm.knowledgespike.cricket/heartbeat/alive && echo " -> API OK"
+```
+
+---
+
 ## Common Operations
 
 ### View live logs
@@ -431,8 +521,11 @@ Backups are saved to `backups/local-vm/`.
 |---|---|---|
 | **Browser: Server Not Found** | Laptop `/etc/hosts` missing entry or typo | Check `/etc/hosts` on laptop. Ensure the IP matches the VM IP. |
 | **Browser: Connection Refused** | nginx not running or firewall blocking port 443 | On VM, check `docker compose ps`. Run `sudo ufw allow 80/tcp && sudo ufw allow 443/tcp`. |
-| **Browser: Invalid / Untrusted Certificate** | `dev-ca.crt` not installed or not trusted | Re-import `dev-ca.crt` on laptop into Keychain/system store and mark as Always Trust. |
+| **Browser: "Your connection is not private" (`NET::ERR_CERT_AUTHORITY_INVALID`)** | `dev-ca.crt` not installed/trusted in laptop Keychain/system store, or browser was not restarted after import | Run `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain certs/local-vm/dev-ca.crt` on your laptop, then **fully restart your browser** (`Cmd + Q`). Alternatively, use Keychain Access GUI (set to Always Trust). |
 | **IdentityServer fails on boot** | Missing Google OAuth credentials | Ensure `Authentication__Google__ClientId` and `Authentication__Google__ClientSecret` have values in `private/local-vm/`. |
 | **AdminUI shows license error** | Missing or expired license | Check `private/local-vm/LicenseKey` file contents. |
 | **AdminUI: Unable to connect to IdentityServer (SSL connection could not be established)** | AdminUI container does not trust the self-signed `dev-ca.crt` on `ids-vm` | Ensure `SSL_CERT_FILE: /run/certs/dev-ca.crt` and `certs/local-vm/dev-ca.crt:/run/certs/dev-ca.crt:ro` volume mount are present in `compose.yaml` under `adminui`, then recreate container: `docker compose up -d --force-recreate adminui`. |
+| **ACS Web: oidc_metadata_unavailable (unable to find valid certification path to requested target)** | JVM container (`acs-web` / `acs-api`) does not trust the self-signed `dev-ca.crt` on `ids-vm` | Ensure `cacerts` was generated by `generate-local-vm-certs.sh` and mounted at `../../certs/local-vm/cacerts:/opt/java/openjdk/lib/security/cacerts:ro` in `compose.yaml` under `acs-web` and `acs-api`. |
+| **ACS Web: 502 Bad Gateway / Unable to connect to the API server (`/api/...`)** | MariaDB credentials mismatch for `cricketarchive` user in `acs-api`, or stale access token cached in `acs-web` | Synchronize the `cricketarchive` password in MariaDB with `private/local-vm/jdbc.password`, then restart containers: `docker compose restart acs-api acs-web`. |
+| **ACS Web: Proxy request failed (`No server host: api-beta... in the server certificate`)** | `server.crt` missing `api-beta.knowledgespike.cricket` SAN used by `acs-web` proxy routing in beta environment mode | Run `./scripts/generate-local-vm-certs.sh --force-server` to reissue `server.crt` with `api-beta.knowledgespike.cricket` SAN, copy to VM, and recreate nginx container (`docker compose up -d --force-recreate nginx`). |
 | **OIDC Login: Redirect URI mismatch** | Client redirect URI in Identity doesn't match `https://web-vm...` | Log into AdminUI and verify that the `acsstats` client has `https://web-vm.knowledgespike.cricket/signin-oidc` registered as an allowed redirect URI. |

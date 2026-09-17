@@ -24,11 +24,17 @@ services:
       MARIADB_PASSWORD_FILE: /run/secrets/mariadb_password
       MARIADB_DATABASE: ${MARIADB_DATABASE:-identity}
       MARIADB_USER: ${MARIADB_USER:-identity}
+      IDS_HOSTNAME: ${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
+      ADMINUI_HOSTNAME: ${ADMINUI_HOSTNAME:-adminui-beta.knowledgespike.cricket}
+      WEB_HOSTNAME: ${WEB_HOSTNAME:-web-beta.knowledgespike.cricket}
+      API_HOSTNAME: ${API_HOSTNAME:-api-beta.knowledgespike.cricket}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
     secrets:
       - mariadb_root_password
       - mariadb_password
       - jdbc.username
       - jdbc.password
+      - AdminUIClientSecret
     volumes:
       - ../../mariadb/init:/docker-entrypoint-initdb.d:ro
       - beta-mariadb-data:/var/lib/mysql

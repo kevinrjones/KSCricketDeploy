@@ -17,6 +17,8 @@ certs/**/*.crt
 certs/**/*.key
 certs/**/*.pem
 certs/**/*.pfx
+certs/**/cacerts
+certs/**/*.p12
 
 # Backup files
 *.sql

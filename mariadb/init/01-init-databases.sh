@@ -27,11 +27,13 @@ fi
     -- 1. Identity database (IdentityServer and AdminUI)
     CREATE DATABASE IF NOT EXISTS \`identity\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
     CREATE USER IF NOT EXISTS 'identity'@'%' IDENTIFIED BY '${APP_PASSWORD}';
+    ALTER USER 'identity'@'%' IDENTIFIED BY '${APP_PASSWORD}';
     GRANT ALL PRIVILEGES ON \`identity\`.* TO 'identity'@'%';
 
     -- 2. CricketArchive database (ACS API)
     CREATE DATABASE IF NOT EXISTS \`cricketarchive\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
     CREATE USER IF NOT EXISTS '${JDBC_USER}'@'%' IDENTIFIED BY '${JDBC_PASSWORD}';
+    ALTER USER '${JDBC_USER}'@'%' IDENTIFIED BY '${JDBC_PASSWORD}';
     GRANT ALL PRIVILEGES ON \`cricketarchive\`.* TO '${JDBC_USER}'@'%';
 
     -- 3. Cricket database (future apps / cricket statistics)
