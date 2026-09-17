@@ -85,6 +85,7 @@ services:
       UiUrl: https://${ADMINUI_HOSTNAME:-adminui-vm.knowledgespike.cricket}
       AuthorityUrl: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
       RequireHttpsMetadata: "true"
+      SSL_CERT_FILE: /run/certs/dev-ca.crt
     secrets:
       - LicenseKey
       - AdminUIClientSecret
@@ -93,6 +94,7 @@ services:
       - IdentityServerConnectionString
     volumes:
       - vm-adminui-logs:/app/logs
+      - ../../certs/local-vm/dev-ca.crt:/run/certs/dev-ca.crt:ro
     networks:
       - acs-net
     depends_on:
@@ -122,7 +124,7 @@ services:
       OIDC_REDIRECT_URI: https://${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/signin-oidc
       OIDC_POST_LOGOUT_REDIRECT_URI: https://${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/
       ACS_API_BASE_URL: https://${API_HOSTNAME:-api-vm.knowledgespike.cricket}
-      KTOR_ENVIRONMENT: local-vm
+      KTOR_ENVIRONMENT: ${KTOR_ENVIRONMENT:-beta}
     volumes:
       - vm-acs-web-logs:/opt/app/logs
     networks:
@@ -181,11 +183,10 @@ services:
           - ${ADMINUI_HOSTNAME:-adminui-vm.knowledgespike.cricket}
           - ${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
           - ${API_HOSTNAME:-api-vm.knowledgespike.cricket}
+          - api-beta.knowledgespike.cricket
     depends_on:
       ids:
-        condition: service_healthy
-      adminui:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz | grep -q 'ok'"]
       interval: 10s

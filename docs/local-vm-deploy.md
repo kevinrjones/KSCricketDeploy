@@ -195,9 +195,10 @@ The `.env` file defines image tags, hostnames, and database settings.
    MARIADB_DATABASE=identity
    MARIADB_USER=identity
 
-   # ACS Web OIDC Credentials
+   # ACS Web OIDC Credentials & Environment
    OIDC_CLIENT_ID=acsstats
    OIDC_CLIENT_SECRET=change-me-to-the-identity-client-secret
+   KTOR_ENVIRONMENT=beta
 
    TZ=UTC
    ```
@@ -230,18 +231,20 @@ This script automatically creates:
 
 ### Step 5.2: Set vendor license and credentials
 
-Now provide your real vendor values for AdminUI and Google authentication:
+`scripts/generate-local-vm-secrets.sh` pre-configures the active Duende AdminUI development license key. If you have your own commercial key or need to set Google OAuth:
 
 ```bash
-# 1. Duende AdminUI License Key 
+# 1. Duende AdminUI License Key (if updating or replacing)
 printf '%s' 'PASTE_YOUR_ADMINUI_LICENSE_KEY_HERE' > private/local-vm/LicenseKey
 
 # 2. Google OAuth credentials (required by IdentityServer on boot) - look in the .microsoft/usersecrets
 printf '%s' 'YOUR_GOOGLE_CLIENT_ID' > private/local-vm/Authentication__Google__ClientId
 printf '%s' 'YOUR_GOOGLE_CLIENT_SECRET' > private/local-vm/Authentication__Google__ClientSecret
 
-# 3. Lock down file permissions
-chmod 600 private/local-vm/*
+# 3. Set file permissions so container users (non-root $APP_UID) can read secrets
+chmod 755 private/local-vm certs/local-vm
+chmod 644 private/local-vm/*
+chmod 644 certs/local-vm/ids-mysql-dp.pfx
 ```
 
 ---
@@ -354,13 +357,13 @@ From your **laptop**, test each service over HTTPS:
 curl -fsS https://ids-vm.knowledgespike.cricket/health/ready && echo " -> IdS OK"
 
 # AdminUI root page
-curl -fsSI https://adminui-vm.knowledgespike.cricket/ | head -n 1
+curl -fsS -o /dev/null https://adminui-vm.knowledgespike.cricket/ && echo "AdminUI OK"
 
-# ACS API health endpoint
-curl -fsS https://api-vm.knowledgespike.cricket/health/ready && echo " -> API OK"
+# ACS API health endpoint (Ktor heartbeat route)
+curl -fsS https://api-vm.knowledgespike.cricket/heartbeat/alive && echo " -> API OK"
 
-# ACS Web home page
-curl -fsSI https://web-vm.knowledgespike.cricket/ | head -n 1
+# ACS Web home page (sends GET; Ktor does not support HEAD requests)
+curl -fsS -o /dev/null https://web-vm.knowledgespike.cricket/ && echo "ACS Web OK"
 ```
 
 ### Step 9.2: Test in your browser
@@ -431,4 +434,5 @@ Backups are saved to `backups/local-vm/`.
 | **Browser: Invalid / Untrusted Certificate** | `dev-ca.crt` not installed or not trusted | Re-import `dev-ca.crt` on laptop into Keychain/system store and mark as Always Trust. |
 | **IdentityServer fails on boot** | Missing Google OAuth credentials | Ensure `Authentication__Google__ClientId` and `Authentication__Google__ClientSecret` have values in `private/local-vm/`. |
 | **AdminUI shows license error** | Missing or expired license | Check `private/local-vm/LicenseKey` file contents. |
+| **AdminUI: Unable to connect to IdentityServer (SSL connection could not be established)** | AdminUI container does not trust the self-signed `dev-ca.crt` on `ids-vm` | Ensure `SSL_CERT_FILE: /run/certs/dev-ca.crt` and `certs/local-vm/dev-ca.crt:/run/certs/dev-ca.crt:ro` volume mount are present in `compose.yaml` under `adminui`, then recreate container: `docker compose up -d --force-recreate adminui`. |
 | **OIDC Login: Redirect URI mismatch** | Client redirect URI in Identity doesn't match `https://web-vm...` | Log into AdminUI and verify that the `acsstats` client has `https://web-vm.knowledgespike.cricket/signin-oidc` registered as an allowed redirect URI. |

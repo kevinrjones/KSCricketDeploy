@@ -183,9 +183,7 @@ services:
           - ${API_HOSTNAME:-api-beta.knowledgespike.cricket}
     depends_on:
       ids:
-        condition: service_healthy
-      adminui:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1/healthz | grep -q 'ok'"]
       interval: 10s
