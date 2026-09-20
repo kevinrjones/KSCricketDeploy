@@ -10,7 +10,7 @@
 
 ```bash
 # 1. Clone this repo onto the VPS
-git clone <this-repo> acs-deploy && cd acs-deploy
+git clone https://github.com/kevinrjones/KSCricketDeploy.git acs-deploy && cd acs-deploy
 
 # 2. Environment + secrets for beta
 cp .env.example environments/beta/.env
@@ -88,10 +88,10 @@ All services share one Docker network. nginx routes by `Host` header. Only ports
 
 ## Environments
 
-| Environment | Compose Project | Hostnames | How names reach the host |
-|-------------|-----------------|-----------|--------------------------|
-| **Beta** | `environments/beta/compose.yaml` | `*-beta.knowledgespike.cricket` | Cloudflare orange-cloud A/AAAA → **VPS public IP** |
-| **Local VM** | `environments/local-vm/compose.yaml` | `*-vm.knowledgespike.cricket` | **Hosts/split-DNS** → VM LAN IP (default), or **Cloudflare Tunnel** — **not** CF A → private IP |
+| Environment  | Compose Project                      | Hostnames                       | How names reach the host                                                                        |
+|--------------|--------------------------------------|---------------------------------|-------------------------------------------------------------------------------------------------|
+| **Beta**     | `environments/beta/compose.yaml`     | `*-beta.knowledgespike.cricket` | Cloudflare orange-cloud A/AAAA → **VPS public IP**                                              |
+| **Local VM** | `environments/local-vm/compose.yaml` | `*-vm.knowledgespike.cricket`   | **Hosts/split-DNS** → VM LAN IP (default), or **Cloudflare Tunnel** — **not** CF A → private IP |
 
 Each environment has its own `.env` with hostnames, image tags, and secret paths. Compose shape stays the same; DNS/TLS front door differs.
 
@@ -99,14 +99,14 @@ Each environment has its own `.env` with hostnames, image tags, and secret paths
 
 All images are published to Docker Hub by their respective app repositories:
 
-| Service | Image | Source Repo |
-|---------|-------|-------------|
-| IdentityServer | `knowledgespike/ids` | Identity repo |
-| AdminUI | `knowledgespike/adminui` | Identity repo |
-| ACS Web | `knowledgespike/acs-cricketarchive-web` | KSCricket repo |
-| ACS API | `knowledgespike/acs-cricketarchive-api` | KSCricket repo |
-| MariaDB | `mariadb:11` | Official |
-| nginx | `nginx:stable-alpine` | Official |
+| Service        | Image                                   | Source Repo    |
+|----------------|-----------------------------------------|----------------|
+| IdentityServer | `knowledgespike/ids`                    | Identity repo  |
+| AdminUI        | `knowledgespike/adminui`                | Identity repo  |
+| ACS Web        | `knowledgespike/acs-cricketarchive-web` | KSCricket repo |
+| ACS API        | `knowledgespike/acs-cricketarchive-api` | KSCricket repo |
+| MariaDB        | `mariadb:11`                            | Official       |
+| nginx          | `nginx:stable-alpine`                   | Official       |
 
 ### Image Tagging
 
@@ -121,9 +121,9 @@ Images are tagged with:
 
 **Two stores** (do not mix them up):
 
-| Store | Path | Holds |
-|-------|------|--------|
-| Env | `environments/<env>/.env` | Image tags, hostnames, `MARIADB_DATABASE` / `MARIADB_USER`, ACS Web `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` |
+| Store | Path                       | Holds                                                                                                                       |
+|-------|----------------------------|-----------------------------------------------------------------------------------------------------------------------------|
+| Env   | `environments/<env>/.env`  | Image tags, hostnames, `MARIADB_DATABASE` / `MARIADB_USER`, ACS Web `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`                 |
 | Files | `private/<env>/<filename>` | Passwords, connection strings, AdminUI license, Google OAuth — **one value per file**, mounted at `/run/secrets/<filename>` |
 
 - `private/.secret-names` is a **cheatsheet only** (Compose does not load it).
@@ -132,15 +132,15 @@ Images are tagged with:
 
 ### Required secret files (local-vm)
 
-| File under `private/local-vm/` | Used by |
-|--------------------------------|---------|
-| `mariadb_root_password`, `mariadb_password` | MariaDB |
-| `ConnectionStrings__identity` | ids |
-| `DataProtection__Certificate__Password` | ids (+ matching `certs/local-vm/ids-mysql-dp.pfx`) |
-| `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret` | ids |
-| `LicenseKey`, `AdminUIClientSecret`, `UsernamePolicy__Secret` | adminui |
-| `IdentityConnectionString`, `IdentityServerConnectionString` | adminui |
-| `jdbc.username`, `jdbc.password` | acs-api |
+| File under `private/local-vm/`                                             | Used by                                            |
+|----------------------------------------------------------------------------|----------------------------------------------------|
+| `mariadb_root_password`, `mariadb_password`                                | MariaDB                                            |
+| `ConnectionStrings__identity`                                              | ids                                                |
+| `DataProtection__Certificate__Password`                                    | ids (+ matching `certs/local-vm/ids-mysql-dp.pfx`) |
+| `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret` | ids                                                |
+| `LicenseKey`, `AdminUIClientSecret`, `UsernamePolicy__Secret`              | adminui                                            |
+| `IdentityConnectionString`, `IdentityServerConnectionString`               | adminui                                            |
+| `jdbc.username`, `jdbc.password`                                           | acs-api                                            |
 
 ACS Web client secret is **`OIDC_CLIENT_SECRET` in `.env`**, not a secret file.
 
@@ -279,10 +279,10 @@ A helper script is provided that automatically tunes packet limits and prints ta
 
 A typical laptop VM has only a **private** IP. Cloudflare (orange-cloud **or** grey-cloud) cannot usefully target that address as an origin: the public internet — including Cloudflare’s network — cannot route to `192.168.x.x` / `10.x.x.x`.
 
-| Environment | Public IP? | Supported front door |
-|-------------|------------|----------------------|
-| **Beta (Netcup)** | Yes | Cloudflare orange-cloud → VPS IP → origin nginx |
-| **Local VM (LAN)** | No | Hosts/split-DNS → VM IP + local TLS, **or** Cloudflare Tunnel |
+| Environment        | Public IP? | Supported front door                                          |
+|--------------------|------------|---------------------------------------------------------------|
+| **Beta (Netcup)**  | Yes        | Cloudflare orange-cloud → VPS IP → origin nginx               |
+| **Local VM (LAN)** | No         | Hosts/split-DNS → VM IP + local TLS, **or** Cloudflare Tunnel |
 
 Compose, image pins, secrets, and Host-based nginx stay the same. Only **name resolution and TLS front door** change.
 
@@ -290,12 +290,12 @@ Compose, image pins, secrets, and Host-based nginx stay the same. Only **name re
 
 Create A/AAAA records to the **VPS public IP** only:
 
-| Hostname | Type | Proxy |
-|----------|------|-------|
-| `ids-beta.knowledgespike.cricket` | A | Orange (proxied) |
-| `adminui-beta.knowledgespike.cricket` | A | Orange (proxied) |
-| `web-beta.knowledgespike.cricket` | A | Orange (proxied) |
-| `api-beta.knowledgespike.cricket` | A | Orange (proxied) |
+| Hostname                              | Type | Proxy            |
+|---------------------------------------|------|------------------|
+| `ids-beta.knowledgespike.cricket`     | A    | Orange (proxied) |
+| `adminui-beta.knowledgespike.cricket` | A    | Orange (proxied) |
+| `web-beta.knowledgespike.cricket`     | A    | Orange (proxied) |
+| `api-beta.knowledgespike.cricket`     | A    | Orange (proxied) |
 
 ### Local VM (default: hosts file)
 
