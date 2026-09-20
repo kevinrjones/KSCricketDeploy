@@ -37,8 +37,10 @@ fi
 # Determine environment hostnames
 IDS_HOST="${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}"
 ADMINUI_HOST="${ADMINUI_HOSTNAME:-adminui-vm.knowledgespike.cricket}"
-WEB_HOST="${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}"
-API_HOST="${API_HOSTNAME:-api-vm.knowledgespike.cricket}"
+WEB_HOST="${ACS_WEB_HOSTNAME:-${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}}"
+API_HOST="${ACS_API_HOSTNAME:-${API_HOSTNAME:-api-vm.knowledgespike.cricket}}"
+BBB_WEB_HOST="${BBB_WEB_HOSTNAME:-bbb-vm.knowledgespike.cricket}"
+BBB_API_HOST="${BBB_API_HOSTNAME:-bbb-api-vm.knowledgespike.cricket}"
 
 # Determine secrets
 if [ -f /run/secrets/AdminUIClientSecret ]; then
@@ -47,29 +49,43 @@ else
     ADMINUI_SECRET="${ADMINUI_CLIENT_SECRET:-Dev}"
 fi
 
-if [ -f /run/secrets/OIDC_CLIENT_SECRET ]; then
+if [ -f /run/secrets/STATS_OIDC_CLIENT_SECRET ]; then
+    ACS_SECRET=$(cat /run/secrets/STATS_OIDC_CLIENT_SECRET | tr -d '\r\n')
+elif [ -f /run/secrets/OIDC_CLIENT_SECRET ]; then
     ACS_SECRET=$(cat /run/secrets/OIDC_CLIENT_SECRET | tr -d '\r\n')
 else
-    ACS_SECRET="${OIDC_CLIENT_SECRET:-2259822cf2184c8d98c719ce84fcc47e}"
+    ACS_SECRET="${STATS_OIDC_CLIENT_SECRET:-${OIDC_CLIENT_SECRET:-2259822cf2184c8d98c719ce84fcc47e}}"
+fi
+
+if [ -f /run/secrets/BBB_OIDC_CLIENT_SECRET ]; then
+    BBB_SECRET=$(cat /run/secrets/BBB_OIDC_CLIENT_SECRET | tr -d '\r\n')
+else
+    BBB_SECRET="${BBB_OIDC_CLIENT_SECRET:-2259822cf2184c8d98c719ce84fcc47e}"
 fi
 
 # Compute SHA512 Base64 hashes using MariaDB SQL
 ADMINUI_HASH=$("${MARIADB_CMD[@]}" -N -B -e "SELECT REPLACE(TO_BASE64(UNHEX(SHA2('${ADMINUI_SECRET}', 512))), '\n', '');")
 ACS_HASH=$("${MARIADB_CMD[@]}" -N -B -e "SELECT REPLACE(TO_BASE64(UNHEX(SHA2('${ACS_SECRET}', 512))), '\n', '');")
+BBB_HASH=$("${MARIADB_CMD[@]}" -N -B -e "SELECT REPLACE(TO_BASE64(UNHEX(SHA2('${BBB_SECRET}', 512))), '\n', '');")
 
 echo "==> Applying identity baseline template with hostnames:"
 echo "    IDS:     https://$IDS_HOST"
 echo "    AdminUI: https://$ADMINUI_HOST"
 echo "    Web:     https://$WEB_HOST"
 echo "    API:     https://$API_HOST"
+echo "    BBB Web: https://$BBB_WEB_HOST"
+echo "    BBB API: https://$BBB_API_HOST"
 
 sed \
     -e "s|{{IDS_URL}}|https://${IDS_HOST}|g" \
     -e "s|{{ADMINUI_URL}}|https://${ADMINUI_HOST}|g" \
     -e "s|{{WEB_URL}}|https://${WEB_HOST}|g" \
     -e "s|{{API_URL}}|https://${API_HOST}|g" \
+    -e "s|{{BBB_WEB_URL}}|https://${BBB_WEB_HOST}|g" \
+    -e "s|{{BBB_API_URL}}|https://${BBB_API_HOST}|g" \
     -e "s|{{ADMINUI_SECRET_HASH}}|${ADMINUI_HASH}|g" \
     -e "s|{{ACS_SECRET_HASH}}|${ACS_HASH}|g" \
+    -e "s|{{BBB_SECRET_HASH}}|${BBB_HASH}|g" \
     "$TEMPLATE_FILE" | "${MARIADB_CMD[@]}" identity
 
 echo "==> Identity baseline initialization complete."

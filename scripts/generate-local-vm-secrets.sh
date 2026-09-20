@@ -129,8 +129,11 @@ else
 fi
 
 # Remind about OIDC secret in .env
-if [[ -f "$ENV_FILE" ]] && grep -q 'OIDC_CLIENT_SECRET=change-me' "$ENV_FILE" 2>/dev/null; then
-  printf '\nNOTE: set OIDC_CLIENT_SECRET in %s to the ACS client secret from Identity.\n' "$ENV_FILE"
+if [[ -f "$ENV_FILE" ]] && grep -q 'STATS_OIDC_CLIENT_SECRET=change-me' "$ENV_FILE" 2>/dev/null; then
+  printf '\nNOTE: set STATS_OIDC_CLIENT_SECRET in %s to the STATS client secret from Identity.\n' "$ENV_FILE"
+fi
+if [[ -f "$ENV_FILE" ]] && grep -q 'BBB_OIDC_CLIENT_SECRET=change-me' "$ENV_FILE" 2>/dev/null; then
+  printf '\nNOTE: set BBB_OIDC_CLIENT_SECRET in %s to the BBB client secret from Identity.\n' "$ENV_FILE"
 fi
 
 cat <<EOF
@@ -140,9 +143,10 @@ Done. Secret files are in:
 
 Remember:
   1. Replace LicenseKey and Google client files with real values (or disable Google in a custom image if unused).
-  2. Put the same ACS OIDC client secret in environments/local-vm/.env as OIDC_CLIENT_SECRET.
-  3. MariaDB will automatically create identity, cricketarchive, and cricket databases on first startup using mariadb/init/01-init-databases.sh.
-  4. Secrets and certs must remain readable by container users (chmod 644 private/local-vm/* certs/local-vm/ids-mysql-dp.pfx).
+  2. Put the same STATS OIDC client secret in environments/local-vm/.env as STATS_OIDC_CLIENT_SECRET.
+  3. Put the same BBB OIDC client secret in environments/local-vm/.env as BBB_OIDC_CLIENT_SECRET.
+  4. MariaDB will automatically create identity, cricketarchive, and cricket databases on first startup using mariadb/init/01-init-databases.sh.
+  5. Secrets and certs must remain readable by container users (chmod 644 private/local-vm/* certs/local-vm/ids-mysql-dp.pfx).
 
 Generated app DB password is in private/local-vm/mariadb_password (also embedded in connection strings).
 EOF

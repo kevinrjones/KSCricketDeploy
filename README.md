@@ -1,6 +1,6 @@
 # ACS Deploy — Uber Deployment Repository
 
-> **Purpose:** Single Docker Compose project to deploy Identity Server, AdminUI, and ACS services on a shared VPS or local VM behind a single edge nginx.
+> **Purpose:** Single Docker Compose project to deploy Identity Server, AdminUI, ACS, and BBB services on a shared VPS or local VM behind a single edge nginx.
 
 ## Quick Start
 
@@ -30,7 +30,7 @@ $EDITOR environments/beta/.env
 ```
 Cloudflare (orange-cloud proxy)
   → nginx edge (port 443 on VPS)
-    → ids / adminui / acs-web / acs-api / mariadb
+    → ids / adminui / acs-web / acs-api / bbb-web / bbb-api / mariadb
 ```
 
 **Local VM (laptop VM — private LAN IP only):**
@@ -105,6 +105,8 @@ All images are published to Docker Hub by their respective app repositories:
 | AdminUI        | `knowledgespike/adminui`                | Identity repo  |
 | ACS Web        | `knowledgespike/acs-cricketarchive-web` | KSCricket repo |
 | ACS API        | `knowledgespike/acs-cricketarchive-api` | KSCricket repo |
+| BBB Web        | `knowledgespike/bbb-web`                | BBB repo       |
+| BBB API        | `knowledgespike/bbb-api`                | BBB repo       |
 | MariaDB        | `mariadb:11`                            | Official       |
 | nginx          | `nginx:stable-alpine`                   | Official       |
 
@@ -123,7 +125,7 @@ Images are tagged with:
 
 | Store | Path                       | Holds                                                                                                                       |
 |-------|----------------------------|-----------------------------------------------------------------------------------------------------------------------------|
-| Env   | `environments/<env>/.env`  | Image tags, hostnames, `MARIADB_DATABASE` / `MARIADB_USER`, ACS Web `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`                 |
+| Env   | `environments/<env>/.env`  | Image tags, hostnames, `MARIADB_DATABASE` / `MARIADB_USER`, `STATS_OIDC_CLIENT_*`, `BBB_OIDC_CLIENT_*`                      |
 | Files | `private/<env>/<filename>` | Passwords, connection strings, AdminUI license, Google OAuth — **one value per file**, mounted at `/run/secrets/<filename>` |
 
 - `private/.secret-names` is a **cheatsheet only** (Compose does not load it).
@@ -140,15 +142,15 @@ Images are tagged with:
 | `Authentication__Google__ClientId`, `Authentication__Google__ClientSecret` | ids                                                |
 | `LicenseKey`, `AdminUIClientSecret`, `UsernamePolicy__Secret`              | adminui                                            |
 | `IdentityConnectionString`, `IdentityServerConnectionString`               | adminui                                            |
-| `jdbc.username`, `jdbc.password`                                           | acs-api                                            |
+| `jdbc.username`, `jdbc.password`                                           | acs-api, bbb-api                                   |
 
-ACS Web client secret is **`OIDC_CLIENT_SECRET` in `.env`**, not a secret file.
+ACS Web and BBB Web client secrets are **`STATS_OIDC_CLIENT_SECRET` and `BBB_OIDC_CLIENT_SECRET` in `.env`**, not secret files.
 
 ### How to set secrets (local-vm)
 
 ```bash
 cp .env.example environments/local-vm/.env
-# edit image tags, hostnames, OIDC_CLIENT_SECRET
+# edit image tags, hostnames, STATS_OIDC_CLIENT_SECRET, BBB_OIDC_CLIENT_SECRET
 
 ./scripts/generate-local-vm-secrets.sh
 # then replace LicenseKey + Google files with real values
@@ -177,7 +179,7 @@ On the VPS path, set Cloudflare SSL/TLS mode to **Full (strict)**. Origin certif
 
 With the default **hosts → LAN IP** path there is no Cloudflare in front of the VM:
 
-- Run `./scripts/generate-local-vm-certs.sh` (or manual OpenSSL in the local-vm guide) so SANs cover the four `*-vm` hostnames
+- Run `./scripts/generate-local-vm-certs.sh` (or manual OpenSSL in the local-vm guide) so SANs cover the six `*-vm` hostnames (plus `api-beta` for local Ktor BFF proxy routing)
 - Trust `dev-ca.crt` on the laptop/browser
 - Do not expect Cloudflare Full (strict) to apply to this path
 - Details: [docs/local-vm-deploy.md](docs/local-vm-deploy.md)
@@ -290,12 +292,14 @@ Compose, image pins, secrets, and Host-based nginx stay the same. Only **name re
 
 Create A/AAAA records to the **VPS public IP** only:
 
-| Hostname                              | Type | Proxy            |
-|---------------------------------------|------|------------------|
-| `ids-beta.knowledgespike.cricket`     | A    | Orange (proxied) |
-| `adminui-beta.knowledgespike.cricket` | A    | Orange (proxied) |
-| `web-beta.knowledgespike.cricket`     | A    | Orange (proxied) |
-| `api-beta.knowledgespike.cricket`     | A    | Orange (proxied) |
+| Hostname                                  | Type | Proxy            |
+|-------------------------------------------|------|------------------|
+| `ids-beta.knowledgespike.cricket`         | A    | Orange (proxied) |
+| `adminui-beta.knowledgespike.cricket`     | A    | Orange (proxied) |
+| `web-beta.knowledgespike.cricket`         | A    | Orange (proxied) |
+| `api-beta.knowledgespike.cricket`         | A    | Orange (proxied) |
+| `bbb-beta.knowledgespike.cricket`         | A    | Orange (proxied) |
+| `bbb-api-beta.knowledgespike.cricket`     | A    | Orange (proxied) |
 
 ### Local VM (default: hosts file)
 
@@ -308,7 +312,7 @@ Short version:
 3. On the **laptop**, map names to the VM LAN IP:
 
 ```text
-192.168.x.x  ids-vm.knowledgespike.cricket adminui-vm.knowledgespike.cricket web-vm.knowledgespike.cricket api-vm.knowledgespike.cricket
+192.168.x.x  ids-vm.knowledgespike.cricket adminui-vm.knowledgespike.cricket web-vm.knowledgespike.cricket api-vm.knowledgespike.cricket bbb-vm.knowledgespike.cricket bbb-api-vm.knowledgespike.cricket
 ```
 
 4. Trust `certs/local-vm/dev-ca.crt` on those clients (on macOS: `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain certs/local-vm/dev-ca.crt`) and **restart your browser** (`Cmd + Q`) to prevent "Your connection is not private" warnings.

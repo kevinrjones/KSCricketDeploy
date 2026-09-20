@@ -54,6 +54,8 @@ ADMINUI_HOST="adminui-vm.${DOMAIN}"
 WEB_HOST="web-vm.${DOMAIN}"
 API_HOST="api-vm.${DOMAIN}"
 API_BETA_HOST="api-beta.${DOMAIN}"
+BBB_WEB_HOST="bbb-vm.${DOMAIN}"
+BBB_API_HOST="bbb-api-vm.${DOMAIN}"
 
 mkdir -p "${OUT_DIR}"
 cd "${OUT_DIR}"
@@ -120,6 +122,8 @@ else
   echo "  ${WEB_HOST}"
   echo "  ${API_HOST}"
   echo "  ${API_BETA_HOST}"
+  echo "  ${BBB_WEB_HOST}"
+  echo "  ${BBB_API_HOST}"
 
   openssl genrsa -out server.key 2048
   cat > server-ext.cnf <<EOF
@@ -135,6 +139,8 @@ DNS.2 = ${ADMINUI_HOST}
 DNS.3 = ${WEB_HOST}
 DNS.4 = ${API_HOST}
 DNS.5 = ${API_BETA_HOST}
+DNS.6 = ${BBB_WEB_HOST}
+DNS.7 = ${BBB_API_HOST}
 EOF
 
   openssl req -new -key server.key -out server.csr \
@@ -159,5 +165,5 @@ echo
 echo "Next:"
 echo "  1. Copy server.crt/server.key to the VM if you generated them elsewhere"
 echo "  2. Trust dev-ca.crt on the laptop (see docs/local-vm-deploy.md)"
-echo "  3. Add hosts entries → VM LAN IP for the four *-vm names"
+echo "  3. Add hosts entries → VM LAN IP for the six *-vm names"
 echo "  4. ./scripts/deploy.sh local-vm"

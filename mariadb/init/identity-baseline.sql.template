@@ -981,6 +981,7 @@ SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
 LOCK TABLES `ExtendedClients` WRITE;
 /*!40000 ALTER TABLE `ExtendedClients` DISABLE KEYS */;
 INSERT INTO `ExtendedClients` (`Id`, `ClientId`, `Description`, `NormalizedClientId`, `NormalizedClientName`, `Reserved`, `ClientType`) VALUES ('d611b0a2-cc82-4d29-9ba0-dce28b1be255','acsstats','','ACSSTATS','ACS STATISTICS APPLICATION',0x00,9),
+('f722c1b3-dd93-5e30-0cb1-edf39c2cf366','ballbyball','Ball-by-Ball Application','BALLBYBALL','BALL-BY-BALL APPLICATION',0x00,9),
 ('e65801b4-a53d-44ef-9cb5-326bef657c71','admin_ui','IdentityExpress Admin UI','ADMIN_UI','ADMIN UI',0x01,0);
 /*!40000 ALTER TABLE `ExtendedClients` ENABLE KEYS */;
 UNLOCK TABLES;
@@ -990,7 +991,8 @@ SET @OLD_AUTOCOMMIT=@@AUTOCOMMIT, @@AUTOCOMMIT=0;
 LOCK TABLES `Clients` WRITE;
 /*!40000 ALTER TABLE `Clients` DISABLE KEYS */;
 INSERT INTO `Clients` (`Id`, `AbsoluteRefreshTokenLifetime`, `AccessTokenLifetime`, `AccessTokenType`, `AllowAccessTokensViaBrowser`, `AllowOfflineAccess`, `AllowPlainTextPkce`, `AllowRememberConsent`, `AlwaysIncludeUserClaimsInIdToken`, `AlwaysSendClientClaims`, `AuthorizationCodeLifetime`, `BackChannelLogoutSessionRequired`, `BackChannelLogoutUri`, `ClientClaimsPrefix`, `ClientId`, `ClientName`, `ClientUri`, `ConsentLifetime`, `Description`, `EnableLocalLogin`, `Enabled`, `FrontChannelLogoutSessionRequired`, `FrontChannelLogoutUri`, `IdentityTokenLifetime`, `IncludeJwtId`, `LogoUri`, `PairWiseSubjectSalt`, `ProtocolType`, `RefreshTokenExpiration`, `RefreshTokenUsage`, `RequireClientSecret`, `RequireConsent`, `RequirePkce`, `SlidingRefreshTokenLifetime`, `UpdateAccessTokenClaimsOnRefresh`, `Created`, `DeviceCodeLifetime`, `LastAccessed`, `NonEditable`, `Updated`, `UserCodeType`, `UserSsoLifetime`, `AllowedIdentityTokenSigningAlgorithms`, `RequireRequestObject`, `CibaLifetime`, `PollingInterval`, `CoordinateLifetimeWithUserSession`, `DPoPClockSkew`, `DPoPValidationMode`, `InitiateLoginUri`, `RequireDPoP`, `PushedAuthorizationLifetime`, `RequirePushedAuthorization`) VALUES (1,86400,3600,0,0x00,0x01,0x00,0x01,0x00,0x00,300,0x01,NULL,NULL,'admin_ui','Admin UI',NULL,NULL,'IdentityExpress Admin UI',0x01,0x01,0x01,NULL,300,0x01,NULL,NULL,'oidc',1,0,0x01,0x00,0x01,1296000,0x00,'2025-07-16 10:04:27.099790',300,'0001-01-01 00:00:00.000000',1,'0001-01-01 00:00:00.000000',NULL,NULL,'',0x00,NULL,NULL,NULL,'00:05:00.000000',1,NULL,0,NULL,0),
-(2,2592000,3600,0,0x00,0x01,0x00,0x01,0x00,0x00,300,0x01,NULL,NULL,'acsstats','ACS Statistics Application','{{WEB_URL}}',NULL,'',0x01,0x01,0x01,NULL,300,0x01,'{{WEB_URL}}/KnowledgeSpikeLogo.png',NULL,'oidc',1,0,0x01,0x00,0x01,1296000,0x00,'2025-07-16 10:22:01.920316',300,'0001-01-01 00:00:00.000000',0,'2026-04-01 16:13:03.453003',NULL,NULL,'',0x00,NULL,NULL,NULL,'00:05:00.000000',1,NULL,0,NULL,0);
+(2,2592000,3600,0,0x00,0x01,0x00,0x01,0x00,0x00,300,0x01,NULL,NULL,'acsstats','ACS Statistics Application','{{WEB_URL}}',NULL,'',0x01,0x01,0x01,NULL,300,0x01,'{{WEB_URL}}/KnowledgeSpikeLogo.png',NULL,'oidc',1,0,0x01,0x00,0x01,1296000,0x00,'2025-07-16 10:22:01.920316',300,'0001-01-01 00:00:00.000000',0,'2026-04-01 16:13:03.453003',NULL,NULL,'',0x00,NULL,NULL,NULL,'00:05:00.000000',1,NULL,0,NULL,0),
+(3,2592000,3600,0,0x00,0x01,0x00,0x01,0x00,0x00,300,0x01,NULL,NULL,'ballbyball','Ball-by-Ball Application','{{BBB_WEB_URL}}',NULL,'',0x01,0x01,0x01,NULL,300,0x01,'{{BBB_WEB_URL}}/KnowledgeSpikeLogo.png',NULL,'oidc',1,0,0x01,0x00,0x01,1296000,0x00,'2026-09-20 10:22:01.920316',300,'0001-01-01 00:00:00.000000',0,'2026-09-20 16:13:03.453003',NULL,NULL,'',0x00,NULL,NULL,NULL,'00:05:00.000000',1,NULL,0,NULL,0);
 /*!40000 ALTER TABLE `Clients` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;
@@ -1000,7 +1002,9 @@ LOCK TABLES `ClientGrantTypes` WRITE;
 /*!40000 ALTER TABLE `ClientGrantTypes` DISABLE KEYS */;
 INSERT INTO `ClientGrantTypes` (`Id`, `ClientId`, `GrantType`) VALUES (1,1,'authorization_code'),
 (21,2,'authorization_code'),
-(22,2,'client_credentials');
+(22,2,'client_credentials'),
+(31,3,'authorization_code'),
+(32,3,'client_credentials');
 /*!40000 ALTER TABLE `ClientGrantTypes` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;
@@ -1016,7 +1020,13 @@ INSERT INTO `ClientScopes` (`Id`, `ClientId`, `Scope`) VALUES (2,1,'admin_api'),
 (72,2,'acs.api.write'),
 (73,2,'acs.identity'),
 (74,2,'openid'),
-(75,2,'profile');
+(75,2,'profile'),
+(80,3,'acs.api'),
+(81,3,'acs.api.read'),
+(82,3,'acs.api.write'),
+(83,3,'acs.identity'),
+(84,3,'openid'),
+(85,3,'profile');
 /*!40000 ALTER TABLE `ClientScopes` ENABLE KEYS */;
 UNLOCK TABLES;
 COMMIT;
@@ -1153,23 +1163,28 @@ SET AUTOCOMMIT=@OLD_AUTOCOMMIT;
 DELETE FROM `ClientSecrets`;
 INSERT INTO `ClientSecrets` (`Id`, `ClientId`, `Description`, `Value`, `Expiration`, `Type`, `Created`) VALUES
 (1, 1, 'AdminUI Client Secret', '{{ADMINUI_SECRET_HASH}}', NULL, 'SharedSecret', NOW()),
-(2, 2, 'ACS Web Client Secret', '{{ACS_SECRET_HASH}}', NULL, 'SharedSecret', NOW());
+(2, 2, 'ACS Web Client Secret', '{{ACS_SECRET_HASH}}', NULL, 'SharedSecret', NOW()),
+(3, 3, 'BBB Web Client Secret', '{{BBB_SECRET_HASH}}', NULL, 'SharedSecret', NOW());
 
 DELETE FROM `ClientRedirectUris`;
 INSERT INTO `ClientRedirectUris` (`Id`, `ClientId`, `RedirectUri`) VALUES
 (1, 1, '{{ADMINUI_URL}}/signin-oidc'),
-(2, 2, '{{WEB_URL}}/signin-oidc');
+(2, 2, '{{WEB_URL}}/signin-oidc'),
+(3, 3, '{{BBB_WEB_URL}}/signin-oidc');
 
 DELETE FROM `ClientPostLogoutRedirectUris`;
 INSERT INTO `ClientPostLogoutRedirectUris` (`Id`, `ClientId`, `PostLogoutRedirectUri`) VALUES
 (1, 1, '{{ADMINUI_URL}}'),
 (2, 1, '{{ADMINUI_URL}}/signout-callback-oidc'),
 (3, 2, '{{WEB_URL}}/signout-callback-oidc'),
-(4, 2, '{{WEB_URL}}/');
+(4, 2, '{{WEB_URL}}/'),
+(5, 3, '{{BBB_WEB_URL}}/signout-callback-oidc'),
+(6, 3, '{{BBB_WEB_URL}}/');
 
 DELETE FROM `ClientCorsOrigins`;
 INSERT INTO `ClientCorsOrigins` (`Id`, `ClientId`, `Origin`) VALUES
 (1, 1, '{{ADMINUI_URL}}'),
-(2, 2, '{{WEB_URL}}');
+(2, 2, '{{WEB_URL}}'),
+(3, 3, '{{BBB_WEB_URL}}');
 
 SET FOREIGN_KEY_CHECKS=1;

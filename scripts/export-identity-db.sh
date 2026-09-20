@@ -236,6 +236,8 @@ for stmt in statements:
     if "INSERT INTO `Clients`" in stmt:
         stmt = stmt.replace("'https://cricket.knowledgespike.local'", "'{{WEB_URL}}'")
         stmt = stmt.replace("'https://cricket.knowledgespike.local/KnowledgeSpikeLogo.png'", "'{{WEB_URL}}/KnowledgeSpikeLogo.png'")
+        stmt = stmt.replace("'https://bbb.knowledgespike.local'", "'{{BBB_WEB_URL}}'")
+        stmt = stmt.replace("'https://bbb.knowledgespike.local/KnowledgeSpikeLogo.png'", "'{{BBB_WEB_URL}}/KnowledgeSpikeLogo.png'")
 
     out.append(stmt + ";")
 
@@ -248,14 +250,16 @@ out.append("-- -----------------------------------------------------------------
 out.append("DELETE FROM `ClientSecrets`;")
 out.append("INSERT INTO `ClientSecrets` (`Id`, `ClientId`, `Description`, `Value`, `Expiration`, `Type`, `Created`) VALUES")
 out.append("(1, 1, 'AdminUI Client Secret', '{{ADMINUI_SECRET_HASH}}', NULL, 'SharedSecret', NOW()),")
-out.append("(2, 2, 'ACS Web Client Secret', '{{ACS_SECRET_HASH}}', NULL, 'SharedSecret', NOW());")
+out.append("(2, 2, 'ACS Web Client Secret', '{{ACS_SECRET_HASH}}', NULL, 'SharedSecret', NOW()),")
+out.append("(3, 3, 'BBB Web Client Secret', '{{BBB_SECRET_HASH}}', NULL, 'SharedSecret', NOW());")
 out.append("")
 
 # ClientRedirectUris
 out.append("DELETE FROM `ClientRedirectUris`;")
 out.append("INSERT INTO `ClientRedirectUris` (`Id`, `ClientId`, `RedirectUri`) VALUES")
 out.append("(1, 1, '{{ADMINUI_URL}}/signin-oidc'),")
-out.append("(2, 2, '{{WEB_URL}}/signin-oidc');")
+out.append("(2, 2, '{{WEB_URL}}/signin-oidc'),")
+out.append("(3, 3, '{{BBB_WEB_URL}}/signin-oidc');")
 out.append("")
 
 # ClientPostLogoutRedirectUris
@@ -264,14 +268,17 @@ out.append("INSERT INTO `ClientPostLogoutRedirectUris` (`Id`, `ClientId`, `PostL
 out.append("(1, 1, '{{ADMINUI_URL}}'),")
 out.append("(2, 1, '{{ADMINUI_URL}}/signout-callback-oidc'),")
 out.append("(3, 2, '{{WEB_URL}}/signout-callback-oidc'),")
-out.append("(4, 2, '{{WEB_URL}}/');")
+out.append("(4, 2, '{{WEB_URL}}/'),")
+out.append("(5, 3, '{{BBB_WEB_URL}}/signout-callback-oidc'),")
+out.append("(6, 3, '{{BBB_WEB_URL}}/');")
 out.append("")
 
 # ClientCorsOrigins
 out.append("DELETE FROM `ClientCorsOrigins`;")
 out.append("INSERT INTO `ClientCorsOrigins` (`Id`, `ClientId`, `Origin`) VALUES")
 out.append("(1, 1, '{{ADMINUI_URL}}'),")
-out.append("(2, 2, '{{WEB_URL}}');")
+out.append("(2, 2, '{{WEB_URL}}'),")
+out.append("(3, 3, '{{BBB_WEB_URL}}');")
 out.append("")
 
 out.append("SET FOREIGN_KEY_CHECKS=1;")

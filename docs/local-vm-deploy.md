@@ -8,34 +8,34 @@ You will run the **exact same Docker Compose stack** used in production/beta, bu
 
 ## Architecture Overview
 
-When deployed, your VM will run 6 interconnected containers inside a single Docker network:
+When deployed, your VM will run 8 interconnected containers inside a single Docker network:
 
 ```
 Laptop Browser
       │
       │  https://*.knowledgespike.cricket (via /etc/hosts -> VM IP)
       ▼
-┌────────────────────────────────────────────────────────┐
-│ Linux VM                                               │
-│                                                        │
-│  ┌──────────────────────────────────────────────────┐  │
-│  │ nginx (Edge Reverse Proxy, ports 80 & 443)       │  │
-│  └──────┬────────────┬─────────────┬────────────┬───┘  │
-│         │            │             │            │      │
-│         ▼            ▼             ▼            ▼      │
-│     ┌───────┐  ┌───────────┐  ┌─────────┐  ┌─────────┐ │
-│     │  ids  │  │  adminui  │  │ acs-web │  │ acs-api │ │
-│     └───┬───┘  └─────┬─────┘  └────┬────┘  └────┬────┘ │
-│         │            │             │            │      │
-│         │            │             │ OIDC Auth  │      │
-│         │            │             └───────────►│      │
-│         │            │                          │      │
-│         ▼            ▼                          ▼      │
-│     ┌────────────────────────────────────────────────┐ │
-│     │ MariaDB (Port 3306, internal only)             │ │
-│     │ Databases: identity, cricketarchive, cricket   │ │
-│     └────────────────────────────────────────────────┘ │
-└────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│ Linux VM                                                                         │
+│                                                                                  │
+│  ┌────────────────────────────────────────────────────────────────────────────┐  │
+│  │ nginx (Edge Reverse Proxy, ports 80 & 443)                                 │  │
+│  └──────┬────────────┬─────────────┬────────────┬─────────────┬────────────┬──┘  │
+│         │            │             │            │             │            │     │
+│         ▼            ▼             ▼            ▼             ▼            ▼     │
+│     ┌───────┐  ┌───────────┐  ┌─────────┐  ┌─────────┐   ┌─────────┐  ┌─────────┐│
+│     │  ids  │  │  adminui  │  │ acs-web │  │ acs-api │   │ bbb-web │  │ bbb-api ││
+│     └───┬───┘  └─────┬─────┘  └────┬────┘  └────┬────┘   └────┬────┘  └────┬────┘│
+│         │            │             │            │              │            │    │
+│         │            │             │ OIDC Auth  │              │ OIDC Auth  │    │
+│         │            │             └───────────►│              └───────────►│    │
+│         │            │                          │                           │    │
+│         ▼            ▼                          ▼                           ▼    │
+│     ┌────────────────────────────────────────────────────────────────────────┐   │
+│     │ MariaDB (Port 3306, internal only)                                     │   │
+│     │ Databases: identity, cricketarchive, cricket                           │   │
+│     └────────────────────────────────────────────────────────────────────────┘   │
+└──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### The Three Databases
@@ -43,13 +43,13 @@ Laptop Browser
 The MariaDB container hosts all application databases on one instance:
 
 1. **`identity`** — Used by IdentityServer (`ids`) and AdminUI for user accounts, configuration, operational grants, and Data Protection keys.
-2. **`cricketarchive`** — Used by the Cricket Archive API (`acs-api`).
+2. **`cricketarchive`** — Used by the Cricket Archive API (`acs-api`) and Ball-by-Ball API (`bbb-api`).
 3. **`cricket`** — Used for cricket statistics and upcoming applications.
 
 **Automatic Initialization:**  
 In the old Docker Swarm setup, SQL scripts were mounted into `/docker-entrypoint-initdb.d`. We use that exact same automatic pattern here:
 1. `mariadb/init/01-init-databases.sh`: Creates all three databases (`identity`, `cricketarchive`, `cricket`) and configures their application users and permissions.
-2. `mariadb/init/02-init-identity-data.sh`: Automatically applies the clean identity baseline data (`mariadb/init/identity-baseline.sql.template`), substituting VM hostnames and hashed client secrets for AdminUI and ACS Web.
+2. `mariadb/init/02-init-identity-data.sh`: Automatically applies the clean identity baseline data (`mariadb/init/identity-baseline.sql.template`), substituting VM hostnames and hashed client secrets for AdminUI, ACS Web, and BBB Web.
 
 When MariaDB starts up for the first time with a fresh volume, it automatically runs these scripts. You don't need to manually run any SQL to get started! If you ever need to re-seed an existing container, you can also run `./scripts/import-identity-db.sh local-vm`.
 
@@ -186,28 +186,34 @@ The `.env` file defines image tags, hostnames, and database settings.
    ADMINUI_IMAGE=knowledgespike/acs-cricketarchive-adminui:latest
    ACS_WEB_IMAGE=knowledgespike/acs-cricketarchive-web:latest
    ACS_API_IMAGE=knowledgespike/acs-cricketarchive-api:latest
+   BBB_WEB_IMAGE=knowledgespike/bbb-web:latest
+   BBB_API_IMAGE=knowledgespike/bbb-api:latest
    MARIADB_IMAGE=mariadb:11
    NGINX_IMAGE=nginx:stable-alpine
 
    # Hostnames for local VM routing
    IDS_HOSTNAME=ids-vm.knowledgespike.cricket
    ADMINUI_HOSTNAME=adminui-vm.knowledgespike.cricket
-   WEB_HOSTNAME=web-vm.knowledgespike.cricket
-   API_HOSTNAME=api-vm.knowledgespike.cricket
+   ACS_WEB_HOSTNAME=web-vm.knowledgespike.cricket
+   ACS_API_HOSTNAME=api-vm.knowledgespike.cricket
+   BBB_WEB_HOSTNAME=bbb-vm.knowledgespike.cricket
+   BBB_API_HOSTNAME=bbb-api-vm.knowledgespike.cricket
 
    # MariaDB App User
    MARIADB_DATABASE=identity
    MARIADB_USER=identity
 
-   # ACS Web OIDC Credentials & Environment
-   OIDC_CLIENT_ID=acsstats
-   OIDC_CLIENT_SECRET=change-me-to-the-identity-client-secret
+   # OIDC Credentials & Environment
+   STATS_OIDC_CLIENT_ID=acsstats
+   STATS_OIDC_CLIENT_SECRET=change-me-to-the-identity-client-secret
+   BBB_OIDC_CLIENT_ID=ballbyball
+   BBB_OIDC_CLIENT_SECRET=change-me-to-the-identity-client-secret
    KTOR_ENVIRONMENT=beta
 
    TZ=UTC
    ```
 
-4. Set `OIDC_CLIENT_SECRET` to the client secret configured in IdentityServer for the `acsstats` client. Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`).
+4. Set `STATS_OIDC_CLIENT_SECRET` and `BBB_OIDC_CLIENT_SECRET` to the client secrets configured in IdentityServer. Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`).
 
 ---
 
@@ -229,7 +235,7 @@ This script automatically creates:
 - `mariadb_password` — Random password for the `identity` user.
 - `ConnectionStrings__identity` — Connection string for IdentityServer pointing to MariaDB.
 - `IdentityConnectionString` & `IdentityServerConnectionString` — Matching strings for AdminUI.
-- `jdbc.username` (`cricketarchive`) & `jdbc.password` — Credentials for the ACS API.
+- `jdbc.username` (`cricketarchive`) & `jdbc.password` — Credentials for the ACS and BBB APIs.
 - `DataProtection__Certificate__Password` & `certs/local-vm/ids-mysql-dp.pfx` — ASP.NET Data Protection encryption key.
 - `AdminUIClientSecret` & `UsernamePolicy__Secret` — AdminUI operational credentials.
 
@@ -255,7 +261,7 @@ chmod 644 certs/local-vm/ids-mysql-dp.pfx
 
 ## Step 6: Create TLS Certificates (Private CA)
 
-Because your VM is on a local private IP, we use a local Certificate Authority (CA) to sign a certificate covering all four local hostnames.
+Because your VM is on a local private IP, we use a local Certificate Authority (CA) to sign a certificate covering all local hostnames.
 
 1. Run the certificate generation script:
    ```bash
@@ -266,12 +272,14 @@ Because your VM is on a local private IP, we use a local Certificate Authority (
 2. This produces the following files in `certs/local-vm/`:
    - `dev-ca.crt` — The Root CA public certificate. **You will install this on your laptop.**
    - `dev-ca.key` — The private key for your CA.
-   - `cacerts` — The Java truststore containing `dev-ca.crt` (mounted into JVM containers `acs-web` and `acs-api`).
+   - `cacerts` — The Java truststore containing `dev-ca.crt` (mounted into JVM containers `acs-web`, `acs-api`, `bbb-web`, and `bbb-api`).
    - `server.crt` — The SSL certificate configured for:
      - `ids-vm.knowledgespike.cricket`
      - `adminui-vm.knowledgespike.cricket`
      - `web-vm.knowledgespike.cricket`
      - `api-vm.knowledgespike.cricket`
+     - `bbb-vm.knowledgespike.cricket`
+     - `bbb-api-vm.knowledgespike.cricket`
      - `api-beta.knowledgespike.cricket` (used by `acs-web` internal BFF proxy routes in `beta` mode)
    - `server.key` — The private key for nginx TLS termination.
 
@@ -290,7 +298,7 @@ sudo nano /etc/hosts
 
 Add this line (replace `<VM_IP>` with your VM's actual IP address from Step 1):
 ```text
-<VM_IP>  ids-vm.knowledgespike.cricket adminui-vm.knowledgespike.cricket web-vm.knowledgespike.cricket api-vm.knowledgespike.cricket
+<VM_IP>  ids-vm.knowledgespike.cricket adminui-vm.knowledgespike.cricket web-vm.knowledgespike.cricket api-vm.knowledgespike.cricket bbb-vm.knowledgespike.cricket bbb-api-vm.knowledgespike.cricket
 ```
 Save and exit.
 
@@ -337,7 +345,7 @@ sudo cp certs/local-vm/dev-ca.crt /usr/local/share/ca-certificates/dev-ca.crt
 sudo update-ca-certificates
 ```
 
-Now your laptop browsers and `curl` will trust the VM's HTTPS endpoints (`https://ids-vm...`, `https://web-vm...`, `https://adminui-vm...`, `https://api-vm...`) with a secure padlock.
+Now your laptop browsers and `curl` will trust the VM's HTTPS endpoints (`https://ids-vm...`, `https://web-vm...`, `https://adminui-vm...`, `https://api-vm...`, `https://bbb-vm...`, `https://bbb-api-vm...`) with a secure padlock.
 
 ---
 
@@ -355,7 +363,7 @@ Back on your **VM**, start the containers:
 2. What `deploy.sh` does:
    - Pulls the latest container images.
    - Starts MariaDB, mounts `mariadb/init/01-init-databases.sh`, and initializes the `identity`, `cricketarchive`, and `cricket` databases automatically.
-   - Starts IdentityServer, AdminUI, ACS Web, and ACS API.
+   - Starts IdentityServer, AdminUI, ACS Web, ACS API, BBB Web, and BBB API.
    - Starts nginx on ports 80 and 443 with your TLS certificates.
    - Monitors container health checks until all services report healthy.
 
@@ -364,7 +372,7 @@ Back on your **VM**, start the containers:
    cd ~/acs-deploy/environments/local-vm
    docker compose --env-file .env ps
    ```
-   All 6 services (`mariadb`, `ids`, `adminui`, `acs-web`, `acs-api`, `nginx`) should show `Up` or `Up (healthy)`.
+   All 8 services (`mariadb`, `ids`, `adminui`, `acs-web`, `acs-api`, `bbb-web`, `bbb-api`, `nginx`) should show `Up` or `Up (healthy)`.
 
 ---
 
@@ -382,10 +390,16 @@ curl -fsS https://ids-vm.knowledgespike.cricket/health/ready && echo " -> IdS OK
 curl -fsS -o /dev/null https://adminui-vm.knowledgespike.cricket/ && echo "AdminUI OK"
 
 # ACS API health endpoint (Ktor heartbeat route)
-curl -fsS https://api-vm.knowledgespike.cricket/heartbeat/alive && echo " -> API OK"
+curl -fsS https://api-vm.knowledgespike.cricket/heartbeat/alive && echo " -> ACS API OK"
 
 # ACS Web home page (sends GET; Ktor does not support HEAD requests)
 curl -fsS -o /dev/null https://web-vm.knowledgespike.cricket/ && echo "ACS Web OK"
+
+# BBB API health endpoint (Ktor heartbeat route)
+curl -fsS https://bbb-api-vm.knowledgespike.cricket/heartbeat/alive && echo " -> BBB API OK"
+
+# BBB Web home page
+curl -fsS -o /dev/null https://bbb-vm.knowledgespike.cricket/ && echo "BBB Web OK"
 ```
 
 ### Step 9.2: Test in your browser
@@ -396,6 +410,8 @@ curl -fsS -o /dev/null https://web-vm.knowledgespike.cricket/ && echo "ACS Web O
    - You should see the AdminUI login and dashboard.
 3. Open **`https://web-vm.knowledgespike.cricket`**:
    - Click login. It will redirect to `ids-vm.knowledgespike.cricket` for authentication, and return back to `web-vm.knowledgespike.cricket/signin-oidc`.
+4. Open **`https://bbb-vm.knowledgespike.cricket`**:
+   - Click login. It will redirect to `ids-vm.knowledgespike.cricket` for authentication, and return back to `bbb-vm.knowledgespike.cricket/signin-oidc`.
 
 ---
 
@@ -480,6 +496,8 @@ docker compose --env-file .env logs -f ids
 docker compose --env-file .env logs -f adminui
 docker compose --env-file .env logs -f acs-api
 docker compose --env-file .env logs -f acs-web
+docker compose --env-file .env logs -f bbb-api
+docker compose --env-file .env logs -f bbb-web
 docker compose --env-file .env logs -f nginx
 ```
 
