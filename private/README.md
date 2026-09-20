@@ -11,7 +11,7 @@ Compose mounts each file to `/run/secrets/<filename>` (see `environments/*/compo
 
 | Mechanism | What goes here | Who reads it |
 |-----------|----------------|--------------|
-| `environments/<env>/.env` | Image tags, hostnames, `OIDC_CLIENT_*`, MariaDB *database name* / *user name* | Docker Compose substitution + a few plain env vars |
+| `environments/<env>/.env` | Image tags, hostnames, `STATS_OIDC_CLIENT_*`, `BBB_OIDC_CLIENT_*`, MariaDB *database name* / *user name* | Docker Compose substitution + a few plain env vars |
 | `private/<env>/<file>` | Passwords, connection strings, license, Google OAuth | Containers via `/run/secrets` |
 | `certs/<env>/` | TLS + Data Protection PFX | nginx / ids volumes |
 

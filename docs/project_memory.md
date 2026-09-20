@@ -1,5 +1,28 @@
 # Project Memory
 
+## Task: Support Ball-by-Ball (BBB) Services in Deployment Stack
+- **Date/Time Completed**: 2026-09-20 17:50
+- **What Was Shipped**:
+  - Full deployment integration for `bbb-web` and `bbb-api` services in both `environments/beta` and `environments/local-vm`.
+  - Fixed Docker Compose definitions: corrected image variable references (`BBB_API_IMAGE`), decoupled application log volumes (`beta-bbb-*-logs`, `vm-bbb-*-logs`), aligned default OIDC client ID (`ballbyball`), corrected redirect URI and CORS hostname fallbacks, and mounted Java `cacerts` truststore into JVM containers on `local-vm`.
+  - Restored `api-beta.knowledgespike.cricket` alias on Nginx in `local-vm/compose.yaml` to prevent BFF proxy resolution regression.
+  - Added HTTP and HTTPS reverse proxy routing with WebSocket support for `bbb-beta`, `bbb-api-beta`, `bbb-vm`, and `bbb-api-vm` in `nginx/beta.conf` and `nginx/local-vm.conf`.
+  - Updated TLS SANs in `scripts/generate-local-vm-certs.sh` to include `bbb-vm.knowledgespike.cricket` and `bbb-api-vm.knowledgespike.cricket`.
+  - Seeded Identity database baseline template (`identity-baseline.sql.template`) with `ballbyball` client definition (scopes, grant types, secrets, redirect URIs, CORS origins), and updated `02-init-identity-data.sh`, `import-identity-db.sh`, and `export-identity-db.sh` to substitute `BBB_OIDC_CLIENT_SECRET` and hostnames.
+  - Updated all documentation (`README.md`, `docs/local-vm-deploy.md`, `docs/migration-notes.md`, `private/README.md`, `private/.secret-names`).
+- **Key Decisions**:
+  - Maintained dedicated log volumes for `bbb-web` and `bbb-api` across environments rather than sharing with `acs-*` services to isolate application logs.
+  - Provided JVM truststore (`cacerts`) mounts for both new Ktor services in `local-vm` so internal HTTPS OIDC discovery against `ids-vm` and token verification succeed against the private Dev CA.
+  - Pre-seeded the `ballbyball` client into `identity-baseline.sql.template` with SHA-512 hashed secret substitution to allow out-of-the-box authentication upon initial database volume creation.
+- **Gotchas**:
+  - When environment hostnames and secret variables were renamed from `WEB_HOSTNAME` / `OIDC_CLIENT_SECRET` to `ACS_WEB_HOSTNAME` / `STATS_OIDC_CLIENT_SECRET`, database initialization scripts (`02-init-identity-data.sh` and `import-identity-db.sh`) required backward-compatible fallbacks; otherwise default `web-vm...` hostnames were inadvertently rendered in `beta`.
+  - JVM applications (`bbb-api`, `bbb-web`) ignore OpenSSL environment variables like `SSL_CERT_FILE` and require Java truststore mounts (`cacerts`) in local development.
+- **Test Coverage Areas**:
+  - Validated syntax and variable substitutions in `environments/beta/compose.yaml` and `environments/local-vm/compose.yaml`.
+  - Validated Nginx configuration syntax for `nginx/beta.conf` and `nginx/local-vm.conf`.
+  - Validated bash script syntax and option parsing across `scripts/generate-local-vm-certs.sh`, `scripts/import-identity-db.sh`, `scripts/export-identity-db.sh`, and `mariadb/init/02-init-identity-data.sh`.
+  - Validated SQL syntax and placeholder rendering for `mariadb/init/identity-baseline.sql.template`.
+
 ## Task: Add api-beta SAN to Local VM SSL Certificate
 - **Date/Time Completed**: 2026-09-17 13:15
 - **What Was Shipped**:

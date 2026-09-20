@@ -83,8 +83,10 @@ fi
 
 IDS_HOST="${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}"
 ADMINUI_HOST="${ADMINUI_HOSTNAME:-adminui-vm.knowledgespike.cricket}"
-WEB_HOST="${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}"
-API_HOST="${API_HOSTNAME:-api-vm.knowledgespike.cricket}"
+WEB_HOST="${ACS_WEB_HOSTNAME:-${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}}"
+API_HOST="${ACS_API_HOSTNAME:-${API_HOSTNAME:-api-vm.knowledgespike.cricket}}"
+BBB_WEB_HOST="${BBB_WEB_HOSTNAME:-bbb-vm.knowledgespike.cricket}"
+BBB_API_HOST="${BBB_API_HOSTNAME:-bbb-api-vm.knowledgespike.cricket}"
 
 # 2. Load secrets
 ADMINUI_SECRET="Dev"
@@ -92,9 +94,16 @@ if [ -f "$PRIVATE_DIR/AdminUIClientSecret" ]; then
     ADMINUI_SECRET=$(tr -d '\r\n' < "$PRIVATE_DIR/AdminUIClientSecret")
 fi
 
-ACS_SECRET="${OIDC_CLIENT_SECRET:-2259822cf2184c8d98c719ce84fcc47e}"
-if [ -f "$PRIVATE_DIR/OIDC_CLIENT_SECRET" ]; then
+ACS_SECRET="${STATS_OIDC_CLIENT_SECRET:-${OIDC_CLIENT_SECRET:-2259822cf2184c8d98c719ce84fcc47e}}"
+if [ -f "$PRIVATE_DIR/STATS_OIDC_CLIENT_SECRET" ]; then
+    ACS_SECRET=$(tr -d '\r\n' < "$PRIVATE_DIR/STATS_OIDC_CLIENT_SECRET")
+elif [ -f "$PRIVATE_DIR/OIDC_CLIENT_SECRET" ]; then
     ACS_SECRET=$(tr -d '\r\n' < "$PRIVATE_DIR/OIDC_CLIENT_SECRET")
+fi
+
+BBB_SECRET="${BBB_OIDC_CLIENT_SECRET:-2259822cf2184c8d98c719ce84fcc47e}"
+if [ -f "$PRIVATE_DIR/BBB_OIDC_CLIENT_SECRET" ]; then
+    BBB_SECRET=$(tr -d '\r\n' < "$PRIVATE_DIR/BBB_OIDC_CLIENT_SECRET")
 fi
 
 ROOT_PASSWORD=""
@@ -117,12 +126,15 @@ compute_sha512_b64() {
 
 ADMINUI_HASH=$(compute_sha512_b64 "$ADMINUI_SECRET")
 ACS_HASH=$(compute_sha512_b64 "$ACS_SECRET")
+BBB_HASH=$(compute_sha512_b64 "$BBB_SECRET")
 
 echo "→ Target configuration:"
 echo "    IDS:     https://$IDS_HOST"
 echo "    AdminUI: https://$ADMINUI_HOST"
 echo "    Web:     https://$WEB_HOST"
 echo "    API:     https://$API_HOST"
+echo "    BBB Web: https://$BBB_WEB_HOST"
+echo "    BBB API: https://$BBB_API_HOST"
 
 # 4. Render template
 RENDERED_SQL=$(mktemp)
@@ -133,8 +145,11 @@ sed \
     -e "s|{{ADMINUI_URL}}|https://${ADMINUI_HOST}|g" \
     -e "s|{{WEB_URL}}|https://${WEB_HOST}|g" \
     -e "s|{{API_URL}}|https://${API_HOST}|g" \
+    -e "s|{{BBB_WEB_URL}}|https://${BBB_WEB_HOST}|g" \
+    -e "s|{{BBB_API_URL}}|https://${BBB_API_HOST}|g" \
     -e "s|{{ADMINUI_SECRET_HASH}}|${ADMINUI_HASH}|g" \
     -e "s|{{ACS_SECRET_HASH}}|${ACS_HASH}|g" \
+    -e "s|{{BBB_SECRET_HASH}}|${BBB_HASH}|g" \
     "$TEMPLATE_FILE" > "$RENDERED_SQL"
 
 # 5. Determine target connection mode

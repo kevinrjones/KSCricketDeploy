@@ -170,6 +170,7 @@ services:
       ids:
         condition: service_healthy
 
+  # ---- BBB Web ----
   bbb-web:
     image: ${BBB_WEB_IMAGE:?Set BBB_WEB_IMAGE in environments/beta/.env}
     restart: unless-stopped
@@ -178,14 +179,14 @@ services:
       PORT: "5002"
       HOST: 0.0.0.0
       OIDC_AUTHORITY: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
-      OIDC_CLIENT_ID: ${BBB_OIDC_CLIENT_ID:-acsstats}
+      OIDC_CLIENT_ID: ${BBB_OIDC_CLIENT_ID:-ballbyball}
       OIDC_CLIENT_SECRET: ${BBB_OIDC_CLIENT_SECRET:?Set BBB_OIDC_CLIENT_SECRET in environments/beta/.env}
       OIDC_REDIRECT_URI: https://${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}/signin-oidc
       OIDC_POST_LOGOUT_REDIRECT_URI: https://${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}/
       API_BASE_URL: https://${BBB_API_HOSTNAME:-bbb-api-beta.knowledgespike.cricket}
       KTOR_ENVIRONMENT: beta
     volumes:
-      - beta-acs-web-logs:/opt/app/logs
+      - beta-bbb-web-logs:/opt/app/logs
     networks:
       - acs-net
     depends_on:
@@ -198,10 +199,10 @@ services:
       retries: 12
       start_period: 5s
 
-  # ---- ACS API ----
+  # ---- BBB API ----
   # HOCON + env for URL/issuer; jdbc.username / jdbc.password files in /run/secrets override.
   bbb-api:
-    image: ${ACS_API_IMAGE:?Set ACS_API_IMAGE in environments/beta/.env}
+    image: ${BBB_API_IMAGE:?Set BBB_API_IMAGE in environments/beta/.env}
     restart: unless-stopped
     environment:
       DEVELOPMENT: "false"
@@ -210,12 +211,12 @@ services:
       JDBCURL: jdbc:mariadb://mariadb:3306/cricketarchive
       JWKSURL: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/.well-known/openid-configuration/jwks
       ISSUER: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
-      CORS_ORIGINS: https://${BBB_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}
+      CORS_ORIGINS: https://${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}
     secrets:
       - jdbc.username
       - jdbc.password
     volumes:
-      - beta-acs-api-logs:/opt/app/logs
+      - beta-bbb-api-logs:/opt/app/logs
     networks:
       - acs-net
     depends_on:
@@ -269,6 +270,10 @@ volumes:
     name: beta-acs-web-logs
   beta-acs-api-logs:
     name: beta-acs-api-logs
+  beta-bbb-web-logs:
+    name: beta-bbb-web-logs
+  beta-bbb-api-logs:
+    name: beta-bbb-api-logs
 
 # Each secret file's *basename* is the name inside /run/secrets/
 secrets:

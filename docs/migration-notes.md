@@ -79,6 +79,8 @@ Create A records in Cloudflare pointing to the **VPS public IP** (not a laptop V
 - `adminui-beta.knowledgespike.cricket`
 - `web-beta.knowledgespike.cricket`
 - `api-beta.knowledgespike.cricket`
+- `bbb-beta.knowledgespike.cricket`
+- `bbb-api-beta.knowledgespike.cricket`
 
 Set proxy to **orange cloud** (proxied). For local-vm name resolution, see the main README (**hosts file** or **Cloudflare Tunnel** — never A records to `192.168.x.x`).
 
