@@ -26,9 +26,10 @@ services:
       MARIADB_USER: ${MARIADB_USER:-identity}
       IDS_HOSTNAME: ${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
       ADMINUI_HOSTNAME: ${ADMINUI_HOSTNAME:-adminui-vm.knowledgespike.cricket}
-      WEB_HOSTNAME: ${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
-      API_HOSTNAME: ${API_HOSTNAME:-api-vm.knowledgespike.cricket}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      ACS_WEB_HOSTNAME: ${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
+      ACS_API_HOSTNAME: ${ACS_API_HOSTNAME:-api-vm.knowledgespike.cricket}
+      BBB_WEB_HOSTNAME: ${BBB_WEB_HOSTNAME:-bbb-vm.knowledgespike.cricket}
+      BBB_API_HOSTNAME: ${BBB_API_HOSTNAME:-bbb-api-vm.knowledgespike.cricket}
     secrets:
       - mariadb_root_password
       - mariadb_password
@@ -126,10 +127,10 @@ services:
       HOST: 0.0.0.0
       OIDC_AUTHORITY: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
       OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-acsstats}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:?Set OIDC_CLIENT_SECRET in environments/local-vm/.env}
-      OIDC_REDIRECT_URI: https://${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/signin-oidc
-      OIDC_POST_LOGOUT_REDIRECT_URI: https://${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/
-      ACS_API_BASE_URL: https://${API_HOSTNAME:-api-vm.knowledgespike.cricket}
+      OIDC_CLIENT_SECRET: ${STATS_OIDC_CLIENT_SECRET:?Set STATS_OIDC_CLIENT_SECRET in environments/local-vm/.env}
+      OIDC_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/signin-oidc
+      OIDC_POST_LOGOUT_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/
+      ACS_API_BASE_URL: https://${ACS_API_HOSTNAME:-api-vm.knowledgespike.cricket}
       KTOR_ENVIRONMENT: ${KTOR_ENVIRONMENT:-beta}
     volumes:
       - vm-acs-web-logs:/opt/app/logs
@@ -158,7 +159,7 @@ services:
       JDBCURL: jdbc:mariadb://mariadb:3306/cricketarchive
       JWKSURL: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}/.well-known/openid-configuration/jwks
       ISSUER: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
-      CORS_ORIGINS: https://${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
+      CORS_ORIGINS: https://${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
     secrets:
       - jdbc.username
       - jdbc.password
@@ -173,7 +174,61 @@ services:
       ids:
         condition: service_healthy
 
-  # ---- Edge Nginx ----
+  bbb-web:
+    image: ${BBB_WEB_IMAGE:?Set BBB_WEB_IMAGE in environments/local-vm/.env}
+    restart: unless-stopped
+    environment:
+      DEVELOPMENT: "false"
+      PORT: "5002"
+      HOST: 0.0.0.0
+      OIDC_AUTHORITY: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
+      OIDC_CLIENT_ID: ${BBB_OIDC_CLIENT_ID:-acsstats}
+      OIDC_CLIENT_SECRET: ${BBB_OIDC_CLIENT_SECRET:?Set BBB_OIDC_CLIENT_SECRET in environments/local-vm/.env}
+      OIDC_REDIRECT_URI: https://${BBB_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}/signin-oidc
+      OIDC_POST_LOGOUT_REDIRECT_URI: https://${BBB_WEB_HOSTNAME:-bbb-vm.knowledgespike.cricket}/
+      API_BASE_URL: https://${BBB_API_HOSTNAME:-bbb-api-vm.knowledgespike.cricket}
+      KTOR_ENVIRONMENT: beta
+    volumes:
+      - vm-acs-web-logs:/opt/app/logs
+    networks:
+      - acs-net
+    depends_on:
+      ids:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://127.0.0.1:5002/"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  # ---- ACS API ----
+  # HOCON + env for URL/issuer; jdbc.username / jdbc.password files in /run/secrets override.
+  bbb-api:
+    image: ${ACS_API_IMAGE:?Set ACS_API_IMAGE in environments/local-vm/.env}
+    restart: unless-stopped
+    environment:
+      DEVELOPMENT: "false"
+      PORT: "5004"
+      HOST: 0.0.0.0
+      JDBCURL: jdbc:mariadb://mariadb:3306/cricketarchive
+      JWKSURL: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}/.well-known/openid-configuration/jwks
+      ISSUER: https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
+      CORS_ORIGINS: https://${BBB_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
+    secrets:
+      - jdbc.username
+      - jdbc.password
+    volumes:
+      - vm-acs-api-logs:/opt/app/logs
+    networks:
+      - acs-net
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      ids:
+        condition: service_healthy
+        
+    # ---- Edge Nginx ----
   nginx:
     image: ${NGINX_IMAGE:-nginx:stable-alpine}
     restart: unless-stopped
@@ -189,9 +244,10 @@ services:
         aliases:
           - ${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}
           - ${ADMINUI_HOSTNAME:-adminui-vm.knowledgespike.cricket}
-          - ${WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
-          - ${API_HOSTNAME:-api-vm.knowledgespike.cricket}
-          - api-beta.knowledgespike.cricket
+          - ${ACS_WEB_HOSTNAME:-web-vm.knowledgespike.cricket}
+          - ${ACS_API_HOSTNAME:-api-vm.knowledgespike.cricket}
+          - ${BBB_WEB_HOSTNAME:-bbb-vm.knowledgespike.cricket}
+          - ${BBB_API_HOSTNAME:-bbb-api-vm.knowledgespike.cricket}
     depends_on:
       ids:
         condition: service_started
