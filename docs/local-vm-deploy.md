@@ -245,9 +245,11 @@ This script automatically creates:
 
 ```bash
 # 1. Duende AdminUI License Key (if updating or replacing)
+# Get this from the AdminUI project in the IdentityServer solution
 printf '%s' 'PASTE_YOUR_ADMINUI_LICENSE_KEY_HERE' > private/local-vm/LicenseKey
 
-# 2. Google OAuth credentials (required by IdentityServer on boot) - look in the .microsoft/usersecrets
+# 2. Google OAuth credentials (required by IdentityServer on boot) - look in the ~/.microsoft/usersecrets, also
+# in the .env files in this project
 printf '%s' 'YOUR_GOOGLE_CLIENT_ID' > private/local-vm/Authentication__Google__ClientId
 printf '%s' 'YOUR_GOOGLE_CLIENT_SECRET' > private/local-vm/Authentication__Google__ClientSecret
 
