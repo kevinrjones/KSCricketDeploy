@@ -1,5 +1,19 @@
 # Project Memory
 
+## Task: Configure Environment Variables and Docker Secrets for BBB Services
+- **Date/Time Completed**: 2026-09-21 08:30
+- **What Was Shipped**:
+  - Configured `bbb-web` environment variables (`WEB_PORT`, `WEB_HOST`) in `environments/local-vm/compose.yaml` and `environments/beta/compose.yaml` to ensure Ktor binds to port 5002 on 0.0.0.0.
+  - Added entrypoint shell wrapper to `bbb-api` in `compose.yaml` to read mounted Docker secrets (`/run/secrets/jdbc.username` and `/run/secrets/jdbc.password`) into `DB_USER` and `DB_PASSWORD` environment variables without requiring chmod operations.
+  - Aligned `bbb-api` environment variables (`API_PORT`, `JWT_JWKS_URL`, `JWT_ISSUER`, `DB_JDBC_URL`) with Ktor's `application.yaml` keys across both environments.
+- **Key Decisions**:
+  - With upstream container images fixed to contain executable binaries (`chmod +x`), removed all chmod commands from compose definitions.
+  - Maintained dynamic extraction of `jdbc.username` and `jdbc.password` Docker secrets in `bbb-api`'s compose entrypoint because `bbb-api` reads database credentials from environment variables (`DB_USER`, `DB_PASSWORD`) rather than reading `/run/secrets/` directory directly like `acs-api`.
+- **Gotchas**:
+  - `bbb-api` uses `DB_USER`, `DB_PASSWORD`, `API_PORT`, `JWT_JWKS_URL`, and `DB_JDBC_URL` rather than the legacy HOCON variable names (`PORT`, `JDBCURL`, etc.); keeping both ensures compatibility.
+- **Test Coverage Areas**:
+  - Validated syntax and rendered compose configuration with `docker compose config --dry-run` for both `local-vm` and `beta`.
+
 ## Task: Support Ball-by-Ball (BBB) Services in Deployment Stack
 - **Date/Time Completed**: 2026-09-20 17:50
 - **What Was Shipped**:

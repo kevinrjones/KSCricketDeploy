@@ -178,6 +178,8 @@ services:
       DEVELOPMENT: "false"
       PORT: "5002"
       HOST: 0.0.0.0
+      WEB_PORT: "5002"
+      WEB_HOST: 0.0.0.0
       OIDC_AUTHORITY: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
       OIDC_CLIENT_ID: ${BBB_OIDC_CLIENT_ID:-ballbyball}
       OIDC_CLIENT_SECRET: ${BBB_OIDC_CLIENT_SECRET:?Set BBB_OIDC_CLIENT_SECRET in environments/beta/.env}
@@ -204,10 +206,21 @@ services:
   bbb-api:
     image: ${BBB_API_IMAGE:?Set BBB_API_IMAGE in environments/beta/.env}
     restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -f /run/secrets/jdbc.username ]; then export DB_USER=$$(cat /run/secrets/jdbc.username); fi
+        if [ -f /run/secrets/jdbc.password ]; then export DB_PASSWORD=$$(cat /run/secrets/jdbc.password); fi
+        exec /opt/app/bin/bbb-api
     environment:
       DEVELOPMENT: "false"
       PORT: "5004"
       HOST: 0.0.0.0
+      API_PORT: "5004"
+      JWT_JWKS_URL: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/.well-known/openid-configuration/jwks
+      JWT_ISSUER: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
+      DB_JDBC_URL: jdbc:mariadb://mariadb:3306/cricketarchive
       JDBCURL: jdbc:mariadb://mariadb:3306/cricketarchive
       JWKSURL: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/.well-known/openid-configuration/jwks
       ISSUER: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
