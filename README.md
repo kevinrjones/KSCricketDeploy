@@ -65,7 +65,7 @@ All services share one Docker network. nginx routes by `Host` header. Only ports
 │   ├── baseline/
 │   │   └── schema.ddl             # Modern EF Core 9 baseline DDL
 │   └── init/
-│       ├── 01-init-databases.sh   # Automated DB & user setup (identity, cricketarchive, cricket)
+│       ├── 01-init-databases.sh   # Automated DB & user setup (identity, cricketarchive, acs_ball_by_ball, cricket)
 │       ├── 02-init-identity-data.sh # Automated baseline seed on empty volume
 │       └── identity-baseline.sql.template # Cleaned identity baseline template
 ├── certs/                  # Origin TLS certificates (gitignored)

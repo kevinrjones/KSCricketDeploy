@@ -1,6 +1,21 @@
 # Project Memory
 
-## Task: Configure Environment Variables and Docker Secrets for BBB Services
+## Task: Resolve BBB API Database Connection Refused and Configure acs_ball_by_ball Database
+- **Date/Time Completed**: 2026-09-21 09:15
+- **What Was Shipped**:
+  - Diagnosed `java.sql.SQLNonTransientConnectionException: Socket fail to connect to localhost. Connection refused` in `bbb-api`. Root cause: `bbb-api` reads `database.jdbcUrl: "${DB_JDBC_URL:jdbc:mariadb://localhost:3306/acs_ball_by_ball}"`; without `DB_JDBC_URL` passed in the container environment, Ktor falls back to `localhost:3306` inside the container where no database server is running.
+  - Updated `environments/local-vm/compose.yaml` and `environments/beta/compose.yaml` to set `DB_JDBC_URL: jdbc:mariadb://mariadb:3306/acs_ball_by_ball` (and `JDBCURL` fallback).
+  - Updated `mariadb/init/01-init-databases.sh` to initialize the `acs_ball_by_ball` database and grant full privileges to `${JDBC_USER}` on fresh MariaDB container volume startup.
+  - Updated `docs/local-vm-deploy.md` and `README.md` to document the 4-database topology (`identity`, `cricketarchive`, `acs_ball_by_ball`, `cricket`), provide instructions and exact SQL commands for upgrading existing MariaDB volumes without data loss, and added troubleshooting table entries for `Connection refused` and `Unknown database 'acs_ball_by_ball'`.
+- **Key Decisions**:
+  - Separated `acs_ball_by_ball` from `cricketarchive` because `bbb-api` queries dimensional warehouse tables (`dim_match`, `fact_delivery`) managed by Ball-by-Ball Flyway migrations, whereas `cricketarchive` contains ACS legacy cricket tables.
+  - Added upgrade instructions for existing MariaDB volumes, since MariaDB's entrypoint scripts only run upon initial volume creation and will not automatically create `acs_ball_by_ball` on already-initialized volumes.
+- **Gotchas**:
+  - The error message `Socket fail to connect to localhost. Connection refused` does NOT mean the database is missing on MariaDB; it means the application attempted to connect to port 3306 on the container's own loopback interface (`localhost`) instead of the `mariadb` container service on the Docker network.
+  - Once `DB_JDBC_URL` is set to `jdbc:mariadb://mariadb:3306/acs_ball_by_ball`, MariaDB will return `Unknown database 'acs_ball_by_ball'` unless the database and user permissions are created on existing volumes.
+- **Test Coverage Areas**:
+  - Validated compose configurations across `environments/local-vm` and `environments/beta` using `docker compose config --dry-run`.
+  - Validated shell script syntax in `mariadb/init/01-init-databases.sh` with `bash -n`.
 - **Date/Time Completed**: 2026-09-21 08:30
 - **What Was Shipped**:
   - Configured `bbb-web` environment variables (`WEB_PORT`, `WEB_HOST`) in `environments/local-vm/compose.yaml` and `environments/beta/compose.yaml` to ensure Ktor binds to port 5002 on 0.0.0.0.

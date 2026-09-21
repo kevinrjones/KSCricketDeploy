@@ -33,25 +33,37 @@ Laptop Browser
 │         ▼            ▼                          ▼                           ▼    │
 │     ┌────────────────────────────────────────────────────────────────────────┐   │
 │     │ MariaDB (Port 3306, internal only)                                     │   │
-│     │ Databases: identity, cricketarchive, cricket                           │   │
+│     │ Databases: identity, cricketarchive, acs_ball_by_ball, cricket         │   │
 │     └────────────────────────────────────────────────────────────────────────┘   │
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### The Three Databases
+### The Four Databases
 
 The MariaDB container hosts all application databases on one instance:
 
 1. **`identity`** — Used by IdentityServer (`ids`) and AdminUI for user accounts, configuration, operational grants, and Data Protection keys.
-2. **`cricketarchive`** — Used by the Cricket Archive API (`acs-api`) and Ball-by-Ball API (`bbb-api`).
-3. **`cricket`** — Used for cricket statistics and upcoming applications.
+2. **`cricketarchive`** — Used by the Cricket Archive API (`acs-api`).
+3. **`acs_ball_by_ball`** — Used by the Ball-by-Ball API (`bbb-api`).
+4. **`cricket`** — Used for cricket statistics and upcoming applications.
 
 **Automatic Initialization:**  
 In the old Docker Swarm setup, SQL scripts were mounted into `/docker-entrypoint-initdb.d`. We use that exact same automatic pattern here:
-1. `mariadb/init/01-init-databases.sh`: Creates all three databases (`identity`, `cricketarchive`, `cricket`) and configures their application users and permissions.
+1. `mariadb/init/01-init-databases.sh`: Creates all four databases (`identity`, `cricketarchive`, `acs_ball_by_ball`, `cricket`) and configures their application users and permissions.
 2. `mariadb/init/02-init-identity-data.sh`: Automatically applies the clean identity baseline data (`mariadb/init/identity-baseline.sql.template`), substituting VM hostnames and hashed client secrets for AdminUI, ACS Web, and BBB Web.
 
 When MariaDB starts up for the first time with a fresh volume, it automatically runs these scripts. You don't need to manually run any SQL to get started! If you ever need to re-seed an existing container, you can also run `./scripts/import-identity-db.sh local-vm`.
+
+> **Upgrading an Existing VM MariaDB Volume:**  
+> MariaDB only executes `/docker-entrypoint-initdb.d/` scripts on fresh, empty data volumes. If your VM MariaDB volume was initialized prior to `acs_ball_by_ball` being added, create the database and grant user privileges manually without losing existing data:
+> ```bash
+> docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
+>   'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" -e "
+>     CREATE DATABASE IF NOT EXISTS \`acs_ball_by_ball\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+>     GRANT ALL PRIVILEGES ON \`acs_ball_by_ball\`.* TO \"$(cat /run/secrets/jdbc.username)\"@\"%\";
+>     FLUSH PRIVILEGES;
+>   "'
+> ```
 
 ---
 
@@ -251,7 +263,7 @@ printf '%s' 'PASTE_YOUR_ADMINUI_LICENSE_KEY_HERE' > private/local-vm/LicenseKey
 # 2. Google OAuth credentials (required by IdentityServer on boot) - look in the ~/.microsoft/usersecrets, also
 # in the .env files in this project
 printf '%s' 'YOUR_GOOGLE_CLIENT_ID' > private/local-vm/Authentication__Google__ClientId
-printf '%s' 'YOUR_GOOGLE_CLIENT_SECRET' > private/local-vm/Authentication__Google__ClientSecret
+printf '%s' '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' > private/local-vm/Authentication__Google__ClientSecret
 
 # 3. Set file permissions so container users (non-root $APP_UID) can read secrets
 chmod 755 private/local-vm certs/local-vm
@@ -364,7 +376,7 @@ Back on your **VM**, start the containers:
 
 2. What `deploy.sh` does:
    - Pulls the latest container images.
-   - Starts MariaDB, mounts `mariadb/init/01-init-databases.sh`, and initializes the `identity`, `cricketarchive`, and `cricket` databases automatically.
+   - Starts MariaDB, mounts `mariadb/init/01-init-databases.sh`, and initializes the `identity`, `cricketarchive`, `acs_ball_by_ball`, and `cricket` databases automatically.
    - Starts IdentityServer, AdminUI, ACS Web, ACS API, BBB Web, and BBB API.
    - Starts nginx on ports 80 and 443 with your TLS certificates.
    - Monitors container health checks until all services report healthy.
@@ -524,7 +536,7 @@ docker compose --env-file .env up -d
 
 ### Back up the MariaDB databases
 
-A backup script is included that dumps all databases (`identity`, `cricketarchive`, `cricket`) to a timestamped compressed archive:
+A backup script is included that dumps all databases (`identity`, `cricketarchive`, `acs_ball_by_ball`, `cricket`) to a timestamped compressed archive:
 
 ```bash
 cd ~/acs-deploy
@@ -548,4 +560,6 @@ Backups are saved to `backups/local-vm/`.
 | **ACS Web: oidc_metadata_unavailable (unable to find valid certification path to requested target)** | JVM container (`acs-web` / `acs-api`) does not trust the self-signed `dev-ca.crt` on `ids-vm` | Ensure `cacerts` was generated by `generate-local-vm-certs.sh` and mounted at `../../certs/local-vm/cacerts:/opt/java/openjdk/lib/security/cacerts:ro` in `compose.yaml` under `acs-web` and `acs-api`. |
 | **ACS Web: 502 Bad Gateway / Unable to connect to the API server (`/api/...`)** | MariaDB credentials mismatch for `cricketarchive` user in `acs-api`, or stale access token cached in `acs-web` | Synchronize the `cricketarchive` password in MariaDB with `private/local-vm/jdbc.password`, then restart containers: `docker compose restart acs-api acs-web`. |
 | **ACS Web: Proxy request failed (`No server host: api-beta... in the server certificate`)** | `server.crt` missing `api-beta.knowledgespike.cricket` SAN used by `acs-web` proxy routing in beta environment mode | Run `./scripts/generate-local-vm-certs.sh --force-server` to reissue `server.crt` with `api-beta.knowledgespike.cricket` SAN, copy to VM, and recreate nginx container (`docker compose up -d --force-recreate nginx`). |
+| **BBB API: Socket fail to connect to localhost (`Connection refused`)** | Container missing `DB_JDBC_URL` environment variable, defaulting to `localhost:3306` inside container | Ensure `DB_JDBC_URL: jdbc:mariadb://mariadb:3306/acs_ball_by_ball` is present in `environments/local-vm/compose.yaml` under `bbb-api` and recreate container: `docker compose up -d --force-recreate bbb-api`. |
+| **BBB API: Unknown database 'acs_ball_by_ball'** | MariaDB was initialized prior to `acs_ball_by_ball` being added to `01-init-databases.sh` | Run SQL command in MariaDB container to create the database: `docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c 'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" -e "CREATE DATABASE IF NOT EXISTS \\\`acs_ball_by_ball\\\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON \\\`acs_ball_by_ball\\\`.* TO \"$(cat /run/secrets/jdbc.username)\"@\"%\"; FLUSH PRIVILEGES;"'` then restart `bbb-api`: `docker compose restart bbb-api`. |
 | **OIDC Login: Redirect URI mismatch** | Client redirect URI in Identity doesn't match `https://web-vm...` | Log into AdminUI and verify that the `acsstats` client has `https://web-vm.knowledgespike.cricket/signin-oidc` registered as an allowed redirect URI. |

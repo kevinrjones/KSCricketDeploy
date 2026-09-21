@@ -11,7 +11,7 @@ JDBC_PASSWORD=$(cat /run/secrets/jdbc.password 2>/dev/null || echo "changeme")
 JDBC_USER=$(cat /run/secrets/jdbc.username 2>/dev/null || echo "cricketarchive")
 ROOT_PASSWORD=$(cat /run/secrets/mariadb_root_password 2>/dev/null || echo "")
 
-echo "==> Initializing application databases: identity, cricketarchive, cricket..."
+echo "==> Initializing application databases: identity, cricketarchive, acs_ball_by_ball, cricket..."
 
 # Determine MariaDB client connection command:
 # 1. Try passwordless connection (works during entrypoint init before root password is enforced)
@@ -40,6 +40,10 @@ fi
     CREATE DATABASE IF NOT EXISTS \`cricket\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
     GRANT ALL PRIVILEGES ON \`cricket\`.* TO 'identity'@'%';
     GRANT ALL PRIVILEGES ON \`cricket\`.* TO '${JDBC_USER}'@'%';
+
+    -- 4. Ball-by-Ball database (BBB API)
+    CREATE DATABASE IF NOT EXISTS \`acs_ball_by_ball\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    GRANT ALL PRIVILEGES ON \`acs_ball_by_ball\`.* TO '${JDBC_USER}'@'%';
 
     FLUSH PRIVILEGES;
 EOSQL

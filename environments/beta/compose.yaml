@@ -220,8 +220,8 @@ services:
       API_PORT: "5004"
       JWT_JWKS_URL: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/.well-known/openid-configuration/jwks
       JWT_ISSUER: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
-      DB_JDBC_URL: jdbc:mariadb://mariadb:3306/cricketarchive
-      JDBCURL: jdbc:mariadb://mariadb:3306/cricketarchive
+      DB_JDBC_URL: jdbc:mariadb://mariadb:3306/acs_ball_by_ball
+      JDBCURL: jdbc:mariadb://mariadb:3306/acs_ball_by_ball
       JWKSURL: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/.well-known/openid-configuration/jwks
       ISSUER: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
       CORS_ORIGINS: https://${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}
