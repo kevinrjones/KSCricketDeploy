@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Import Cricket Database - Seed / Restore CricketArchive Data in MariaDB
+# Import Cricket / Ball-by-Ball Database - Seed / Restore Data in MariaDB
 # =============================================================================
-# Imports the cricket data SQL dump (or gzipped dump) into MariaDB on the VM
-# or VPS. Can be executed directly inside the VM, or executed from the laptop
-# targeting the VM over SSH.
+# Imports SQL or gzipped dump files into MariaDB on the VM or VPS.
+# Supports both 'cricketarchive' (for acs-api) and 'acs_ball_by_ball' (for bbb-api).
+# Can be executed directly inside the VM, or executed from the laptop
+# targeting the VM or VPS over SSH.
 #
 # Usage:
 #   ./scripts/import-cricket-data.sh [path-to-sql-file] [environment] [options]
@@ -14,7 +15,7 @@
 #   environment:      local-vm or beta (defaults to local-vm)
 #
 # Options:
-#   --database <name>     Target database name (defaults to cricketarchive)
+#   --database <name>     Target database name (cricketarchive or acs_ball_by_ball)
 #   --remote <user@host>  Target remote host over SSH (e.g. parallels@10.211.55.7)
 # =============================================================================
 
@@ -22,17 +23,25 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 
 INPUT_FILE=""
 ENV="local-vm"
-TARGET_DB="cricketarchive"
+TARGET_DB=""
+DB_EXPLICIT=0
 REMOTE_TARGET="${SSH_TARGET:-}"
+
+# If invoked as import-ball-by-ball-data.sh, default target db is acs_ball_by_ball
+if [[ "$SCRIPT_NAME" =~ ball-by-ball ]]; then
+    TARGET_DB="acs_ball_by_ball"
+fi
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --database)
             TARGET_DB="$2"
+            DB_EXPLICIT=1
             shift 2
             ;;
         --remote)
@@ -41,13 +50,15 @@ while [[ $# -gt 0 ]]; do
             ;;
         -*)
             echo "Unknown option: $1"
-            echo "Usage: ./scripts/import-cricket-data.sh [path-to-sql-file] [environment] [--database <name>] [--remote <user@host>]"
+            echo "Usage: ./scripts/$SCRIPT_NAME [path-to-sql-file] [environment] [--database <name>] [--remote <user@host>]"
             exit 1
             ;;
         *)
-            if [ -z "$INPUT_FILE" ]; then
+            if [ "$1" = "local-vm" ] || [ "$1" = "beta" ]; then
+                ENV="$1"
+            elif [ -z "$INPUT_FILE" ]; then
                 INPUT_FILE="$1"
-            elif [ "$ENV" = "local-vm" ]; then
+            else
                 ENV="$1"
             fi
             shift
@@ -55,21 +66,53 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# If database not explicitly set, determine from input file or default
+if [ "$DB_EXPLICIT" -eq 0 ]; then
+    if [ -n "$INPUT_FILE" ] && [[ "$INPUT_FILE" =~ ball-by-ball ]]; then
+        TARGET_DB="acs_ball_by_ball"
+    elif [ -n "$INPUT_FILE" ] && [[ "$INPUT_FILE" =~ cricketarchive ]]; then
+        TARGET_DB="cricketarchive"
+    elif [ -z "$TARGET_DB" ]; then
+        TARGET_DB="cricketarchive"
+    fi
+fi
+
 ENV_DIR="$PROJECT_ROOT/environments/$ENV"
 PRIVATE_DIR="$PROJECT_ROOT/private/$ENV"
 
 # Search for default input file if not provided
 if [ -z "$INPUT_FILE" ]; then
-    CANDIDATES=(
-        "/media/psf/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql"
-        "/media/psf/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql.gz"
-        "$HOME/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql"
-        "$HOME/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql.gz"
-        "$HOME/cricketarchive-upload.sql"
-        "$HOME/cricketarchive-upload.sql.gz"
-        "$PROJECT_ROOT/cricketarchive-upload.sql"
-        "$PROJECT_ROOT/cricketarchive-upload.sql.gz"
-    )
+    if [ "$TARGET_DB" = "acs_ball_by_ball" ]; then
+        CANDIDATES=(
+            "/media/psf/Dropbox/dumps/mysql/ball-by-ball-upload.sql"
+            "/media/psf/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz"
+            "$HOME/Dropbox/dumps/mysql/ball-by-ball-upload.sql"
+            "$HOME/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz"
+            "$HOME/ball-by-ball-upload.sql"
+            "$HOME/ball-by-ball-upload.sql.gz"
+            "$PROJECT_ROOT/ball-by-ball-upload.sql"
+            "$PROJECT_ROOT/ball-by-ball-upload.sql.gz"
+        )
+    else
+        CANDIDATES=(
+            "/media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql"
+            "/media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz"
+            "/media/psf/Dropbox/dumps/mysql/CricketArchive/DatabaseBackup/cricketarchive-upload.sql"
+            "/media/psf/Dropbox/dumps/mysql/CricketArchive/DatabaseBackup/cricketarchive-upload.sql.gz"
+            "$HOME/Dropbox/dumps/mysql/cricketarchive-upload.sql"
+            "$HOME/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz"
+            "$HOME/Dropbox/dumps/mysql/CricketArchive/DatabaseBackup/cricketarchive-upload.sql"
+            "$HOME/Dropbox/dumps/mysql/CricketArchive/DatabaseBackup/cricketarchive-upload.sql.gz"
+            "/media/psf/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql"
+            "/media/psf/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql.gz"
+            "$HOME/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql"
+            "$HOME/Dropbox/projects/cricket/CricketArchive/DatabaseBackup/cricketarchive-upload.sql.gz"
+            "$HOME/cricketarchive-upload.sql"
+            "$HOME/cricketarchive-upload.sql.gz"
+            "$PROJECT_ROOT/cricketarchive-upload.sql"
+            "$PROJECT_ROOT/cricketarchive-upload.sql.gz"
+        )
+    fi
     for c in "${CANDIDATES[@]}"; do
         if [ -f "$c" ]; then
             INPUT_FILE="$c"
@@ -79,14 +122,22 @@ if [ -z "$INPUT_FILE" ]; then
 fi
 
 if [ -z "$INPUT_FILE" ] || [ ! -f "$INPUT_FILE" ]; then
-    echo "ERROR: Cricket data file not found."
-    echo "Please provide the file path as the first argument, e.g.:"
-    echo "  ./scripts/import-cricket-data.sh /path/to/cricketarchive-upload.sql [environment]"
+    echo "ERROR: Data file not found for database '$TARGET_DB'."
+    echo "Please provide the file path as an argument, e.g.:"
+    if [ "$TARGET_DB" = "acs_ball_by_ball" ]; then
+        echo "  ./scripts/$SCRIPT_NAME /media/psf/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz [environment]"
+    else
+        echo "  ./scripts/$SCRIPT_NAME /media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz [environment]"
+    fi
     exit 1
 fi
 
 echo "=========================================="
-echo "Importing Cricket Data"
+if [ "$TARGET_DB" = "acs_ball_by_ball" ]; then
+    echo "Importing Ball-by-Ball Cricket Data"
+else
+    echo "Importing CricketArchive Data"
+fi
 echo "Source:      $INPUT_FILE"
 echo "Environment: $ENV"
 echo "Database:    $TARGET_DB"
@@ -121,15 +172,35 @@ if [ -n "$LOCAL_CONTAINER" ]; then
     fi
 
     echo "✓ Import finished! Verifying database tables..."
-    docker exec "$LOCAL_CONTAINER" sh -c "
-        ROOT_PW=\$(cat /run/secrets/mariadb_root_password 2>/dev/null || echo \"\")
-        mariadb -u root -p\"\$ROOT_PW\" -e \"
-            SELECT count(*) AS total_tables FROM information_schema.tables WHERE table_schema='$TARGET_DB';
-            SELECT 'Matches' AS tbl, count(*) AS \`count\` FROM \`$TARGET_DB\`.\`Matches\` UNION ALL
-            SELECT 'Players', count(*) FROM \`$TARGET_DB\`.\`Players\` UNION ALL
-            SELECT 'Teams', count(*) FROM \`$TARGET_DB\`.\`Teams\`;
-        \"
-    "
+    if [ "$TARGET_DB" = "acs_ball_by_ball" ]; then
+        docker exec "$LOCAL_CONTAINER" sh -c "
+            ROOT_PW=\$(cat /run/secrets/mariadb_root_password 2>/dev/null || echo \"\")
+            mariadb -u root -p\"\$ROOT_PW\" -e \"
+                SELECT count(*) AS total_tables FROM information_schema.tables WHERE table_schema='$TARGET_DB';
+                SELECT 'dim_match' AS tbl, count(*) AS total_rows FROM $TARGET_DB.dim_match UNION ALL
+                SELECT 'dim_person', count(*) FROM $TARGET_DB.dim_person UNION ALL
+                SELECT 'dim_team', count(*) FROM $TARGET_DB.dim_team UNION ALL
+                SELECT 'fact_delivery', count(*) FROM $TARGET_DB.fact_delivery;
+            \"
+        "
+    elif [ "$TARGET_DB" = "cricketarchive" ]; then
+        docker exec "$LOCAL_CONTAINER" sh -c "
+            ROOT_PW=\$(cat /run/secrets/mariadb_root_password 2>/dev/null || echo \"\")
+            mariadb -u root -p\"\$ROOT_PW\" -e \"
+                SELECT count(*) AS total_tables FROM information_schema.tables WHERE table_schema='$TARGET_DB';
+                SELECT 'Matches' AS tbl, count(*) AS total_rows FROM $TARGET_DB.Matches UNION ALL
+                SELECT 'Players', count(*) FROM $TARGET_DB.Players UNION ALL
+                SELECT 'Teams', count(*) FROM $TARGET_DB.Teams;
+            \"
+        "
+    else
+        docker exec "$LOCAL_CONTAINER" sh -c "
+            ROOT_PW=\$(cat /run/secrets/mariadb_root_password 2>/dev/null || echo \"\")
+            mariadb -u root -p\"\$ROOT_PW\" -e \"
+                SELECT count(*) AS total_tables FROM information_schema.tables WHERE table_schema='$TARGET_DB';
+            \"
+        "
+    fi
     exit 0
 fi
 
@@ -166,15 +237,35 @@ if [ -n "$REMOTE_TARGET" ]; then
     fi
 
     echo "✓ Import finished on remote host! Verifying database tables..."
-    ssh "$REMOTE_TARGET" "docker exec $REMOTE_CONTAINER sh -c \"
-        ROOT_PW=\\\$(cat /run/secrets/mariadb_root_password 2>/dev/null || echo \\\"\\\")
-        mariadb -u root -p\\\"\\\$ROOT_PW\\\" -e \\\"
-            SELECT count(*) AS total_tables FROM information_schema.tables WHERE table_schema='$TARGET_DB';
-            SELECT 'Matches' AS tbl, count(*) AS \\\`count\\\` FROM \\\`$TARGET_DB\\\`.\\\`Matches\\\\' UNION ALL
-            SELECT 'Players', count(*) FROM \\\`$TARGET_DB\\\`.\\\`Players\\\\' UNION ALL
-            SELECT 'Teams', count(*) FROM \\\`$TARGET_DB\\\`.\\\`Teams\\\\';
-        \\\"
-    \""
+    if [ "$TARGET_DB" = "acs_ball_by_ball" ]; then
+        ssh "$REMOTE_TARGET" "docker exec $REMOTE_CONTAINER sh -c \"
+            ROOT_PW=\\\$(cat /run/secrets/mariadb_root_password 2>/dev/null || echo \\\"\\\")
+            mariadb -u root -p\\\"\\\$ROOT_PW\\\" -e \\\"
+                SELECT count(*) AS total_tables FROM information_schema.tables WHERE table_schema='$TARGET_DB';
+                SELECT 'dim_match' AS tbl, count(*) AS total_rows FROM $TARGET_DB.dim_match UNION ALL
+                SELECT 'dim_person', count(*) FROM $TARGET_DB.dim_person UNION ALL
+                SELECT 'dim_team', count(*) FROM $TARGET_DB.dim_team UNION ALL
+                SELECT 'fact_delivery', count(*) FROM $TARGET_DB.fact_delivery;
+            \\\"
+        \""
+    elif [ "$TARGET_DB" = "cricketarchive" ]; then
+        ssh "$REMOTE_TARGET" "docker exec $REMOTE_CONTAINER sh -c \"
+            ROOT_PW=\\\$(cat /run/secrets/mariadb_root_password 2>/dev/null || echo \\\"\\\")
+            mariadb -u root -p\\\"\\\$ROOT_PW\\\" -e \\\"
+                SELECT count(*) AS total_tables FROM information_schema.tables WHERE table_schema='$TARGET_DB';
+                SELECT 'Matches' AS tbl, count(*) AS total_rows FROM $TARGET_DB.Matches UNION ALL
+                SELECT 'Players', count(*) FROM $TARGET_DB.Players UNION ALL
+                SELECT 'Teams', count(*) FROM $TARGET_DB.Teams;
+            \\\"
+        \""
+    else
+        ssh "$REMOTE_TARGET" "docker exec $REMOTE_CONTAINER sh -c \"
+            ROOT_PW=\\\$(cat /run/secrets/mariadb_root_password 2>/dev/null || echo \\\"\\\")
+            mariadb -u root -p\\\"\\\$ROOT_PW\\\" -e \\\"
+                SELECT count(*) AS total_tables FROM information_schema.tables WHERE table_schema='$TARGET_DB';
+            \\\"
+        \""
+    fi
     exit 0
 fi
 

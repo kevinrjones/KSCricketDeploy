@@ -1,6 +1,42 @@
 # Project Memory
 
-## Task: Resolve BBB API Database Connection Refused and Configure acs_ball_by_ball Database
+## Task: Fix BBB API 502 Bad Gateway and IdentityServer unauthorized_client Error
+- **Date/Time Completed**: 2026-09-21 17:00
+- **What Was Shipped**:
+  - Diagnosed and resolved the `502 Bad Gateway` error when accessing `bbb-api-vm` or when `bbb-web` proxies to `bbb-api`: `bbb-api` reads `API_HOST` (defaulting to `localhost`), meaning `HOST: 0.0.0.0` was ignored and Ktor bound strictly to `127.0.0.1:5004` inside the container. Added `API_HOST: 0.0.0.0` to `environments/local-vm/compose.yaml` and `environments/beta/compose.yaml`.
+  - Diagnosed the `unauthorized_client` error in IdentityServer: the database dumped from the local development Docker container had local redirect URIs (`http://localhost:9999/...`), and `identity-baseline.sql.template` previously inserted client secrets and redirect URIs under hardcoded `ClientId = 3` (whereas `ballbyball` in `Clients` has `Id = 4`).
+  - Updated `mariadb/init/identity-baseline.sql.template` and `scripts/export-identity-db.sh` to use robust dynamic subqueries (`SELECT Id ... FROM Clients WHERE ClientId = 'ballbyball'`) for `ClientSecrets`, `ClientRedirectUris`, `ClientPostLogoutRedirectUris`, and `ClientCorsOrigins`, eliminating ID mismatches.
+  - Updated `ballbyball` client definition in `identity-baseline.sql.template` to use `{{BBB_WEB_URL}}` for `ClientUri` and `LogoUri`.
+  - Updated troubleshooting tables in `docs/local-vm-deploy.md` and corrected the gzipped dump command in the Ball-by-Ball import instructions.
+- **Key Decisions**:
+  - Switched baseline template parameterized inserts to `INSERT INTO ... SELECT Id, ... FROM Clients WHERE ClientId = '<client_id>'` rather than hardcoded integer IDs, ensuring forward and backward compatibility regardless of auto-increment sequences.
+  - Set both `HOST: 0.0.0.0` and `API_HOST: 0.0.0.0` across environments to ensure Ktor binds to all container network interfaces.
+- **Gotchas**:
+  - `acs-api` (using HOCON) binds to `HOST` (defaulting to `0.0.0.0`), but `bbb-api` (using YAML) binds to `API_HOST` (defaulting to `localhost`). If `API_HOST` is omitted, the process is unreachable from outside the container, causing Nginx upstream connection refused (`502 Bad Gateway`).
+  - When raw database dumps from local development are imported into VM or VPS MariaDB instances, IdentityServer tables retain developer loopback URIs (`localhost:4200`, `localhost:9999`), causing Duende IdentityServer to reject authorize requests with `unauthorized_client`.
+- **Test Coverage Areas**:
+  - Validated Docker Compose syntax for both `local-vm` and `beta` with `docker compose config --dry-run`.
+  - Validated template generation with `./scripts/export-identity-db.sh`.
+  - Validated template placeholder substitution with `sed`.
+
+## Task: Support Ball-by-Ball Data Import in MariaDB (acs_ball_by_ball)
+- **Date/Time Completed**: 2026-09-21 16:25
+- **What Was Shipped**:
+  - Updated `scripts/import-cricket-data.sh` to support importing dumps for either `cricketarchive` or `acs_ball_by_ball`, automatically detecting target database from filename or `--database`, automatically locating dump files in candidate paths (e.g. `ball-by-ball-upload.sql[.gz]` and `cricketarchive-upload.sql[.gz]`), and verifying dimensional warehouse tables (`dim_match`, `dim_person`, `dim_team`, `fact_delivery`).
+  - Created dedicated executable helper script `scripts/import-ball-by-ball-data.sh` targeting `acs_ball_by_ball`.
+  - Updated `docs/local-vm-deploy.md` with complete documentation for Step 10.2: importing Ball-by-Ball data via direct Docker Compose commands (uncompressed and gzipped) and helper scripts on VM and laptop over SSH, along with database table verification and BBB API heartbeat checks.
+  - Updated `README.md` and `docs/migration-notes.md` to document the dual data import workflows (`cricketarchive` and `acs_ball_by_ball`) for both `local-vm` and `beta` environments.
+- **Key Decisions**:
+  - Kept `import-cricket-data.sh` as the unified core import engine while providing `import-ball-by-ball-data.sh` as a dedicated convenience script to maintain consistency and DRY logic across data imports.
+  - Auto-detected database selection from input filenames (`ball-by-ball` -> `acs_ball_by_ball`, `cricketarchive` -> `cricketarchive`), while allowing explicit overrides via `--database`.
+  - Implemented database-specific verification queries (reporting table and row counts for `dim_match`, `dim_person`, `dim_team`, and `fact_delivery` for `acs_ball_by_ball`).
+- **Gotchas**:
+  - The dimensional warehouse dump for `acs_ball_by_ball` does not contain legacy `Matches`/`Players`/`Teams` tables; adapting verification queries dynamically to the database type prevents verification failures.
+  - When streaming dumps over SSH to remote containers, unescaped or overly-escaped backticks in SQL query strings caused shell parse errors; eliminating unreserved backticks in the SQL aliases resolved this cleanly.
+- **Test Coverage Areas**:
+  - Tested `scripts/import-ball-by-ball-data.sh` and `scripts/import-cricket-data.sh` with `bash -n`.
+  - Tested candidate file detection for `ball-by-ball-upload.sql[.gz]` on both `local-vm` and `beta` environments.
+  - Tested gzipped file detection and command line parameter parsing.
 - **Date/Time Completed**: 2026-09-21 09:15
 - **What Was Shipped**:
   - Diagnosed `java.sql.SQLNonTransientConnectionException: Socket fail to connect to localhost. Connection refused` in `bbb-api`. Root cause: `bbb-api` reads `database.jdbcUrl: "${DB_JDBC_URL:jdbc:mariadb://localhost:3306/acs_ball_by_ball}"`; without `DB_JDBC_URL` passed in the container environment, Ktor falls back to `localhost:3306` inside the container where no database server is running.

@@ -263,7 +263,7 @@ printf '%s' 'PASTE_YOUR_ADMINUI_LICENSE_KEY_HERE' > private/local-vm/LicenseKey
 # 2. Google OAuth credentials (required by IdentityServer on boot) - look in the ~/.microsoft/usersecrets, also
 # in the .env files in this project
 printf '%s' 'YOUR_GOOGLE_CLIENT_ID' > private/local-vm/Authentication__Google__ClientId
-printf '%s' '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' > private/local-vm/Authentication__Google__ClientSecret
+printf '%s' 'YOUR_GOOGLE_CLIENT_SECRET' > private/local-vm/Authentication__Google__ClientSecret
 
 # 3. Set file permissions so container users (non-root $APP_UID) can read secrets
 chmod 755 private/local-vm certs/local-vm
@@ -410,7 +410,7 @@ curl -fsS https://api-vm.knowledgespike.cricket/heartbeat/alive && echo " -> ACS
 curl -fsS -o /dev/null https://web-vm.knowledgespike.cricket/ && echo "ACS Web OK"
 
 # BBB API health endpoint (Ktor heartbeat route)
-curl -fsS https://bbb-api-vm.knowledgespike.cricket/heartbeat/alive && echo " -> BBB API OK"
+curl -fsS https://bbb-api-vm.knowledgespike.cricket/api/heartbeat/alive && echo " -> BBB API OK"
 
 # BBB Web home page
 curl -fsS -o /dev/null https://bbb-vm.knowledgespike.cricket/ && echo "BBB Web OK"
@@ -429,11 +429,17 @@ curl -fsS -o /dev/null https://bbb-vm.knowledgespike.cricket/ && echo "BBB Web O
 
 ---
 
-## Step 10: Import Cricket Data into MariaDB
+## Step 10: Import Application Data into MariaDB
 
-The `cricketarchive` database contains all matches, players, teams, grounds, and statistics used by the ACS API (`acs-api`).
+The application stack uses two primary data stores for cricket information:
+1. **`cricketarchive`** — Contains all matches, players, teams, grounds, and statistics consumed by the ACS API (`acs-api`).
+2. **`acs_ball_by_ball`** — Dimensional warehouse containing delivery and match details consumed by the Ball-by-Ball API (`bbb-api`).
 
-### Option A: Direct Command Line (Run on the VM)
+---
+
+### Step 10.1: Import CricketArchive Data (`cricketarchive`)
+
+#### Option A: Direct Command Line (Run on the VM)
 
 From your **VM terminal**, stream the SQL dump into the running MariaDB container using `docker compose`:
 
@@ -457,7 +463,7 @@ docker exec -i acs-local-vm-mariadb-1 sh -c \
   < /media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql
 ```
 
-### Option B: Using the Helper Script
+#### Option B: Using the Helper Script
 
 A helper script is included in `scripts/import-cricket-data.sh` that dynamically optimizes MariaDB buffer sizes, auto-detects plain or gzipped files, and displays row count verification on completion:
 
@@ -474,7 +480,7 @@ You can also run the import script directly from your **laptop** targeting the V
 ./scripts/import-cricket-data.sh ~/Dropbox/dumps/mysql/cricketarchive-upload.sql local-vm
 ```
 
-### Step 10.1: Verify Cricket Data Import
+#### Verify CricketArchive Import
 
 Verify the imported tables and record counts from the VM:
 
@@ -493,6 +499,71 @@ docker compose exec mariadb sh -c '
 And test the ACS API health route:
 ```bash
 curl -fsS https://api-vm.knowledgespike.cricket/heartbeat/alive && echo " -> API OK"
+```
+
+---
+
+### Step 10.2: Import Ball-by-Ball Data (`acs_ball_by_ball`)
+
+The Ball-by-Ball database dump (`ball-by-ball-upload.sql` or `ball-by-ball-upload.sql.gz`) populates the dimensional warehouse tables (`dim_match`, `dim_person`, `dim_team`, `fact_delivery`) required by `bbb-api`.
+
+#### Option A: Direct Command Line (Run on the VM)
+
+From your **VM terminal**, stream the SQL dump into the running MariaDB container:
+
+```bash
+cd ~/acs-deploy
+
+# If using uncompressed SQL (e.g. from Parallels shared folder):
+docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
+  'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G acs_ball_by_ball' \
+  < /media/psf/Dropbox/dumps/mysql/ball-by-ball-upload.sql
+
+# Or if using a gzipped dump:
+gunzip -c /media/psf/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz | docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
+  'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G acs_ball_by_ball'
+```
+
+#### Option B: Using the Helper Script
+
+Use `scripts/import-ball-by-ball-data.sh` (or `scripts/import-cricket-data.sh` with `ball-by-ball-upload.sql[.gz]`):
+
+```bash
+cd ~/acs-deploy
+chmod +x scripts/import-ball-by-ball-data.sh
+
+# Run inside the VM (auto-detects /media/psf/Dropbox/dumps/mysql/ball-by-ball-upload.sql[.gz] if omitted):
+./scripts/import-ball-by-ball-data.sh local-vm
+
+# Or specify the dump file explicitly:
+./scripts/import-ball-by-ball-data.sh /media/psf/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz local-vm
+```
+
+You can also run the import script directly from your **laptop** targeting the VM over SSH:
+```bash
+./scripts/import-ball-by-ball-data.sh ~/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz local-vm
+```
+
+#### Verify Ball-by-Ball Import
+
+Verify the imported dimensional tables and record counts from the VM:
+
+```bash
+cd ~/acs-deploy/environments/local-vm
+docker compose exec mariadb sh -c '
+  mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" -e "
+    SELECT count(*) AS total_tables FROM information_schema.tables WHERE table_schema=\"acs_ball_by_ball\";
+    SELECT \"dim_match\" AS tbl, count(*) AS count FROM acs_ball_by_ball.dim_match UNION ALL
+    SELECT \"dim_person\", count(*) FROM acs_ball_by_ball.dim_person UNION ALL
+    SELECT \"dim_team\", count(*) FROM acs_ball_by_ball.dim_team UNION ALL
+    SELECT \"fact_delivery\", count(*) FROM acs_ball_by_ball.fact_delivery;
+  "
+'
+```
+
+And test the BBB API heartbeat route:
+```bash
+curl -fsS https://bbb-api-vm.knowledgespike.cricket/api/heartbeat/alive && echo " -> BBB API OK"
 ```
 
 ---
@@ -562,4 +633,6 @@ Backups are saved to `backups/local-vm/`.
 | **ACS Web: Proxy request failed (`No server host: api-beta... in the server certificate`)** | `server.crt` missing `api-beta.knowledgespike.cricket` SAN used by `acs-web` proxy routing in beta environment mode | Run `./scripts/generate-local-vm-certs.sh --force-server` to reissue `server.crt` with `api-beta.knowledgespike.cricket` SAN, copy to VM, and recreate nginx container (`docker compose up -d --force-recreate nginx`). |
 | **BBB API: Socket fail to connect to localhost (`Connection refused`)** | Container missing `DB_JDBC_URL` environment variable, defaulting to `localhost:3306` inside container | Ensure `DB_JDBC_URL: jdbc:mariadb://mariadb:3306/acs_ball_by_ball` is present in `environments/local-vm/compose.yaml` under `bbb-api` and recreate container: `docker compose up -d --force-recreate bbb-api`. |
 | **BBB API: Unknown database 'acs_ball_by_ball'** | MariaDB was initialized prior to `acs_ball_by_ball` being added to `01-init-databases.sh` | Run SQL command in MariaDB container to create the database: `docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c 'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" -e "CREATE DATABASE IF NOT EXISTS \\\`acs_ball_by_ball\\\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON \\\`acs_ball_by_ball\\\`.* TO \"$(cat /run/secrets/jdbc.username)\"@\"%\"; FLUSH PRIVILEGES;"'` then restart `bbb-api`: `docker compose restart bbb-api`. |
+| **BBB API: 502 Bad Gateway / Connection refused from upstream** | `API_HOST: 0.0.0.0` missing in compose file; Ktor binds to container `localhost` by default, rejecting Nginx/proxy calls | Ensure `API_HOST: 0.0.0.0` is present under `bbb-api` in `environments/local-vm/compose.yaml` and recreate container: `docker compose up -d --force-recreate bbb-api`. |
+| **BBB Web / IdS: unauthorized_client on login** | `ClientRedirectUris` in IdentityServer lacks `https://bbb-vm.knowledgespike.cricket/signin-oidc` (or loaded DB has local dev URLs) | Run `./scripts/import-identity-db.sh local-vm` or execute MariaDB SQL: `INSERT INTO identity.ClientRedirectUris (ClientId, RedirectUri) SELECT Id, 'https://bbb-vm.knowledgespike.cricket/signin-oidc' FROM identity.Clients WHERE ClientId = 'ballbyball';`. |
 | **OIDC Login: Redirect URI mismatch** | Client redirect URI in Identity doesn't match `https://web-vm...` | Log into AdminUI and verify that the `acsstats` client has `https://web-vm.knowledgespike.cricket/signin-oidc` registered as an allowed redirect URI. |

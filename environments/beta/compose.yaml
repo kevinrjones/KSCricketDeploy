@@ -218,6 +218,7 @@ services:
       PORT: "5004"
       HOST: 0.0.0.0
       API_PORT: "5004"
+      API_HOST: 0.0.0.0
       JWT_JWKS_URL: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/.well-known/openid-configuration/jwks
       JWT_ISSUER: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
       DB_JDBC_URL: jdbc:mariadb://mariadb:3306/acs_ball_by_ball

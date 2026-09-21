@@ -74,6 +74,8 @@ All services share one Docker network. nginx routes by `Host` header. Only ports
 │   ├── backup.sh                       # MariaDB backup script
 │   ├── export-identity-db.sh           # Export and clean identity baseline from local DB
 │   ├── import-identity-db.sh           # Import sanitized baseline into running target
+│   ├── import-cricket-data.sh          # Import CricketArchive / custom dump into MariaDB
+│   ├── import-ball-by-ball-data.sh     # Import Ball-by-Ball dump into MariaDB
 │   ├── generate-local-vm-certs.sh      # Private CA + nginx cert for *-vm hostnames
 │   └── generate-local-vm-secrets.sh    # DB/OIDC-related secret files + DP PFX
 ├── private/                # Per-env secret *files* (gitignored bodies; see private/README.md)
@@ -225,6 +227,11 @@ The Identity database contains users, roles, claims, clients, and API resources.
 - Defaults: source `identity-dev`, output `mariadb/init/identity-baseline.sql.template`.
 - Dumps users, roles, claims, client definitions, and resources while stripping ephemeral keys (`DataProtectionKeys`, `Keys`, `PersistedGrants`, `AuditEntries`).
 - Replaces machine-specific URLs and client secrets with environment template placeholders (`{{IDS_URL}}`, `{{WEB_URL}}`, `{{ADMINUI_SECRET_HASH}}`, etc.).
+- To run that script against the docker version of mariadb running on this machine (which should be the canonical version) then:
+``` bash
+DB_PORT=3307 DB_USER=identity DB_PASS=1db21bdfbe84b1163e81050faf40f85db17a8de0dd9b363a \
+  ./scripts/export-identity-db.sh identity mariadb/init/identity-baseline.sql.template
+  ```
 
 ### 2. Automatic Clean VM Installation
 
@@ -242,37 +249,70 @@ To apply the baseline data to an already running VM container immediately:
 - Reads the environment hostnames (`environments/local-vm/.env`) and secrets (`private/local-vm/`).
 - Computes SHA-512 hashes and streams the rendered SQL directly into the running MariaDB container (locally or over SSH).
 
-## Cricket Data Import
+## Data Import (CricketArchive & Ball-by-Ball)
 
-The `cricketarchive` database holds match, player, team, and statistical data consumed by the `acs-api` service.
+The application stack uses two databases for cricket information:
+- **`cricketarchive`**: Match, player, team, and statistical data consumed by `acs-api`.
+- **`acs_ball_by_ball`**: Dimensional delivery and match tables (`dim_match`, `dim_person`, `fact_delivery`) consumed by `bbb-api`.
 
-### 1. Direct Command Line in VM
+### 1. Direct Command Line Import
 
-Stream the dump file directly into the running MariaDB container:
+#### Local VM
+
+Stream SQL dumps (uncompressed or gzipped) directly into the running MariaDB container on the VM:
 
 ```bash
 cd ~/acs-deploy
 
-# Uncompressed SQL:
-docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
-  'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive' \
-  < /media/psf/Dropbox/dumps/mysql/CricketArchive/DatabaseBackup/cricketarchive-upload.sql
-
-# Gzipped SQL:
+# CricketArchive (cricketarchive)
 gunzip -c /media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz | docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
   'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive'
+
+# Ball-by-Ball (acs_ball_by_ball)
+gunzip -c /media/psf/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz | docker compose -f environments/local-vm/compose.yaml exec -T mariadb sh -c \
+  'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G acs_ball_by_ball'
 ```
 
-### 2. Using the Import Script
-
-A helper script is provided that automatically tunes packet limits and prints table verification counts:
+#### Beta (VPS)
 
 ```bash
-# Run on the VM:
-./scripts/import-cricket-data.sh /media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql local-vm
+cd ~/acs-deploy
 
-# Or run from the laptop targeting the VM over SSH:
-./scripts/import-cricket-data.sh ~/Dropbox/dumps/mysql/cricketarchive-upload.sql local-vm
+# CricketArchive (cricketarchive)
+gunzip -c /path/to/cricketarchive-upload.sql.gz | docker compose -f environments/beta/compose.yaml exec -T mariadb sh -c \
+  'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive'
+
+# Ball-by-Ball (acs_ball_by_ball)
+gunzip -c /path/to/ball-by-ball-upload.sql.gz | docker compose -f environments/beta/compose.yaml exec -T mariadb sh -c \
+  'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G acs_ball_by_ball'
+```
+
+### 2. Using the Import Helper Scripts
+
+Helper scripts are provided that automatically tune packet limits, detect uncompressed or gzipped dumps, and print table verification row counts:
+
+#### Local VM
+
+```bash
+# Inside the VM (auto-detects dumps from shared /media/psf/Dropbox/dumps/mysql/):
+./scripts/import-cricket-data.sh local-vm
+./scripts/import-ball-by-ball-data.sh local-vm
+
+# From laptop targeting the VM over SSH:
+./scripts/import-cricket-data.sh ~/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz local-vm
+./scripts/import-ball-by-ball-data.sh ~/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz local-vm
+```
+
+#### Beta (VPS)
+
+```bash
+# On the VPS host:
+./scripts/import-cricket-data.sh /path/to/cricketarchive-upload.sql.gz beta
+./scripts/import-ball-by-ball-data.sh /path/to/ball-by-ball-upload.sql.gz beta
+
+# Or streamed from laptop to VPS over SSH:
+./scripts/import-cricket-data.sh ~/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz beta --remote root@<vps-ip>
+./scripts/import-ball-by-ball-data.sh ~/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz beta --remote root@<vps-ip>
 ```
 
 ## DNS and local VM

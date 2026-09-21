@@ -91,6 +91,20 @@ cd environments/beta
 ../../scripts/deploy.sh
 ```
 
+### 7.1. Database Data Import (if fresh volume)
+
+If migrating to a new host or starting with an empty MariaDB volume, seed the `cricketarchive` and `acs_ball_by_ball` databases:
+
+```bash
+# On the beta host:
+./scripts/import-cricket-data.sh /path/to/cricketarchive-upload.sql.gz beta
+./scripts/import-ball-by-ball-data.sh /path/to/ball-by-ball-upload.sql.gz beta
+
+# Or streamed from laptop over SSH:
+./scripts/import-cricket-data.sh ~/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz beta --remote root@<vps-ip>
+./scripts/import-ball-by-ball-data.sh ~/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz beta --remote root@<vps-ip>
+```
+
 ### 8. Verify
 
 ```bash
