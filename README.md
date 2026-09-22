@@ -310,14 +310,18 @@ Helper scripts are provided that automatically tune packet limits, detect uncomp
 #### Beta (VPS)
 
 ```bash
-# On the VPS host:
-./scripts/import-cricket-data.sh /path/to/cricketarchive-upload.sql.gz beta
-./scripts/import-ball-by-ball-data.sh /path/to/ball-by-ball-upload.sql.gz beta
+# On the VPS host, with dumps stored in ~/sql:
+./scripts/import-cricket-data.sh ~/sql/cricketarchive-upload.sql.gz beta
+./scripts/import-ball-by-ball-data.sh ~/sql/ball-by-ball-upload.sql.gz beta
 
-# Or streamed from laptop to VPS over SSH:
+# Or stream dumps stored on the laptop to the VPS over SSH:
 ./scripts/import-cricket-data.sh ~/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz beta --remote root@<vps-ip>
 ./scripts/import-ball-by-ball-data.sh ~/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz beta --remote root@<vps-ip>
 ```
+
+The dump path is resolved on the machine running the script. A path such as
+`~/sql/cricketarchive-upload.sql.gz` therefore refers to the VPS only when the
+command is run from the VPS; use `--remote` when the dump is on the laptop.
 
 ## DNS and local VM
 
@@ -340,10 +344,14 @@ Create A/AAAA records to the **VPS public IP** only:
 |-------------------------------------------|------|------------------|
 | `ids-beta.knowledgespike.cricket`         | A    | Orange (proxied) |
 | `adminui-beta.knowledgespike.cricket`     | A    | Orange (proxied) |
-| `web-beta.knowledgespike.cricket`         | A    | Orange (proxied) |
-| `api-beta.knowledgespike.cricket`         | A    | Orange (proxied) |
+| `stats-beta.knowledgespike.cricket`       | A    | Orange (proxied) |
+| `stats-api-beta.knowledgespike.cricket`   | A    | Orange (proxied) |
 | `bbb-beta.knowledgespike.cricket`         | A    | Orange (proxied) |
 | `bbb-api-beta.knowledgespike.cricket`     | A    | Orange (proxied) |
+
+`web-beta` and `api-beta` remain Nginx aliases for backward compatibility, but
+the `stats-*` names are the canonical Beta ACS URLs used by the deployment
+guide and OIDC configuration.
 
 ### Local VM (default: hosts file)
 

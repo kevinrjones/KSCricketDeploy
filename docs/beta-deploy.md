@@ -355,6 +355,19 @@ On your **Beta VPS**, start the stack:
    ```
    All 8 services (`mariadb`, `ids`, `adminui`, `acs-web`, `acs-api`, `bbb-web`, `bbb-api`, `nginx`) should show `Up` or `Up (healthy)`.
 
+> **Keeping the VPS checkout current:** The Nginx server-name mappings in
+> `nginx/beta.conf` must be present on the VPS, not only in your laptop copy.
+> If you changed the deployment files locally without committing and pushing
+> them, synchronize the files before deploying. For an Nginx-only update, run
+> this from your laptop and then recreate Nginx on the VPS:
+> ```bash
+> scp nginx/beta.conf <user>@<VPS_IP>:~/acs-deploy/nginx/beta.conf
+> ssh <user>@<VPS_IP> 'cd ~/acs-deploy && docker compose --env-file environments/beta/.env -f environments/beta/compose.yaml up -d --force-recreate nginx'
+> ```
+> Run the Compose command on the VPS. Running it from a laptop against a
+> remote Docker context can resolve bind-mounted secret and certificate paths
+> on the laptop instead of on the VPS.
+
 ---
 
 ## Step 8: Verify Everything Works
@@ -383,6 +396,12 @@ curl -fsS https://bbb-api-beta.knowledgespike.cricket/api/heartbeat/alive && ech
 curl -fsS -o /dev/null https://bbb-beta.knowledgespike.cricket/ && echo "BBB Web OK"
 ```
 
+The canonical ACS hostnames are `stats-beta.knowledgespike.cricket` and
+`stats-api-beta.knowledgespike.cricket`. The older `web-beta` and `api-beta`
+names are Nginx aliases only; they are not required DNS records for a new
+deployment. The ACS Web root check intentionally discards the HTML body,
+whereas the ACS API and BBB API checks print their heartbeat JSON.
+
 ### Step 8.2: Test in your browser
 
 1. Open **`https://ids-beta.knowledgespike.cricket`** in your browser:
@@ -408,7 +427,7 @@ The application stack uses two primary data stores for cricket information:
 
 #### Option A: Direct Command Line (Run on the VPS)
 
-From your **VPS terminal**, stream the SQL dump into the running MariaDB container:
+From your **VPS terminal**, stream the SQL dump into the running MariaDB container. The examples below assume the dump files are in `~/sql/`:
 
 ```bash
 cd ~/acs-deploy
@@ -416,10 +435,10 @@ cd ~/acs-deploy
 # If using uncompressed SQL:
 docker compose -f environments/beta/compose.yaml exec -T mariadb sh -c \
   'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive' \
-  < /path/to/cricketarchive-upload.sql
+  < ~/sql/cricketarchive-upload.sql
 
 # Or if using a gzipped dump:
-gunzip -c /path/to/cricketarchive-upload.sql.gz | docker compose -f environments/beta/compose.yaml exec -T mariadb sh -c \
+gunzip -c ~/sql/cricketarchive-upload.sql.gz | docker compose -f environments/beta/compose.yaml exec -T mariadb sh -c \
   'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G cricketarchive'
 ```
 
@@ -436,6 +455,10 @@ gunzip -c ~/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz | ssh <user>@<VPS_I
   'docker compose -f ~/acs-deploy/environments/beta/compose.yaml exec -T mariadb sh -c \
    "mariadb -u root -p\$(cat /run/secrets/mariadb_root_password) --max-allowed-packet=1G cricketarchive"'
 ```
+
+The helper checks the dump path on the machine where it is run. Use
+`~/sql/cricketarchive-upload.sql.gz` when running the helper from `~/acs-deploy`
+on the VPS, or use `--remote` as above when the dump is stored on your laptop.
 
 #### Verify CricketArchive Import
 
@@ -466,7 +489,7 @@ The Ball-by-Ball database dump (`ball-by-ball-upload.sql` or `ball-by-ball-uploa
 
 #### Option A: Direct Command Line (Run on the VPS)
 
-From your **VPS terminal**, stream the SQL dump into the running MariaDB container:
+From your **VPS terminal**, stream the SQL dump into the running MariaDB container. The examples below assume the dump files are in `~/sql/`:
 
 ```bash
 cd ~/acs-deploy
@@ -474,10 +497,10 @@ cd ~/acs-deploy
 # If using uncompressed SQL:
 docker compose -f environments/beta/compose.yaml exec -T mariadb sh -c \
   'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G acs_ball_by_ball' \
-  < /path/to/ball-by-ball-upload.sql
+  < ~/sql/ball-by-ball-upload.sql
 
 # Or if using a gzipped dump:
-gunzip -c /path/to/ball-by-ball-upload.sql.gz | docker compose -f environments/beta/compose.yaml exec -T mariadb sh -c \
+gunzip -c ~/sql/ball-by-ball-upload.sql.gz | docker compose -f environments/beta/compose.yaml exec -T mariadb sh -c \
   'mariadb -u root -p"$(cat /run/secrets/mariadb_root_password)" --max-allowed-packet=1G acs_ball_by_ball'
 ```
 
@@ -494,6 +517,10 @@ gunzip -c ~/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz | ssh <user>@<VPS_IP>
   'docker compose -f ~/acs-deploy/environments/beta/compose.yaml exec -T mariadb sh -c \
    "mariadb -u root -p\$(cat /run/secrets/mariadb_root_password) --max-allowed-packet=1G acs_ball_by_ball"'
 ```
+
+The helper checks the dump path on the machine where it is run. Use
+`~/sql/ball-by-ball-upload.sql.gz` when running the helper from `~/acs-deploy`
+on the VPS, or use `--remote` as above when the dump is stored on your laptop.
 
 #### Verify Ball-by-Ball Import
 
@@ -601,7 +628,103 @@ The deploy script pulls newer image layers and recreates updated containers with
 | **Cloudflare Error 520 / 502 Bad Gateway** | Upstream application container crashed or is not responding | Check container logs (e.g. `docker compose logs -f acs-web` or `bbb-api`). |
 | **IdentityServer fails on boot** | Missing Google OAuth credentials | Ensure `Authentication__Google__ClientId` and `Authentication__Google__ClientSecret` have values in `private/beta/`. |
 | **AdminUI shows license error** | Missing or expired Duende license | Verify `private/beta/LicenseKey` file contents. |
+| **ACS API heartbeat returns 404, or `stats-*` shows IdentityServer HTML** | The VPS Nginx configuration is stale or the request hostname is not listed in `nginx/beta.conf`; an unmatched HTTPS request falls through to the default IdentityServer virtual host | Ensure `stats-beta` and `stats-api-beta` are present in the VPS copy of `nginx/beta.conf`, synchronize the file if necessary, then run `docker compose --env-file environments/beta/.env -f environments/beta/compose.yaml up -d --force-recreate nginx` on the VPS. Confirm the Cloudflare DNS record points to that VPS. |
+| **`stats-beta/.../api/frontpage/getlatestmatches` returns 502** | This is the ACS Web BFF route, not a direct Nginx proxy to the public ACS API hostname. `acs-web` calls `http://acs-api:5004/api/frontpage/getrecentmatches`; a missing `cricketarchive` table during or after an incomplete import, or an unavailable/slow `acs-api`, makes the BFF return 502 | Check `docker compose --env-file .env logs --tail=200 acs-web acs-api` from `environments/beta`. Look for MariaDB errors such as `Table 'cricketarchive.Tournaments' doesn't exist`, wait for the import to finish, and verify that `Tournaments`, `Matches`, and `Innings` exist in `cricketarchive`. The public `stats-api-beta` endpoint uses a different route and is not the correct diagnostic for this Web BFF request. |
+| **`stats-beta/.../api/frontpage/getlatestmatches` returns HTTP 200 with `data: []`** | The front-page query intentionally limits matches to recent data (currently the last two days) and also requires suitable first-innings records. An older dump can therefore be healthy but produce no current matches | Check the newest `MatchEndDate` in `cricketarchive.Matches` and compare it with the current date. This is an expected empty result, not a routing failure; import a fresher CricketArchive dump rather than changing the deployment routing. |
 | **BBB API: Socket fail to connect to localhost (`Connection refused`)** | Container missing `DB_JDBC_URL` environment variable | Ensure `DB_JDBC_URL: jdbc:mariadb://mariadb:3306/acs_ball_by_ball` is present in `environments/beta/compose.yaml` under `bbb-api`. |
 | **BBB API: 502 Bad Gateway / Connection refused from upstream** | `API_HOST: 0.0.0.0` missing; Ktor binds strictly to `localhost` inside container | Ensure `API_HOST: 0.0.0.0` is present in `compose.yaml` under `bbb-api` and restart: `docker compose up -d --force-recreate bbb-api`. |
 | **BBB Web / IdS: unauthorized_client on login** | `ClientRedirectUris` in IdentityServer lacks `https://bbb-beta.knowledgespike.cricket/signin-oidc` | Re-seed identity database: `./scripts/import-identity-db.sh beta`, or run SQL: `INSERT INTO identity.ClientRedirectUris (ClientId, RedirectUri) SELECT Id, 'https://bbb-beta.knowledgespike.cricket/signin-oidc' FROM identity.Clients WHERE ClientId = 'ballbyball';`. |
 | **OIDC Login: Redirect URI mismatch** | Client redirect URI in Identity does not match `https://stats-beta...` | Log into AdminUI and verify that the `acsstats` client has `https://stats-beta.knowledgespike.cricket/signin-oidc` registered as an allowed redirect URI. |
+
+
+## OIDC / TLS trust (beta login 502)
+
+### Symptom
+`/bff/login` on `stats-beta` / `bbb-beta` returns **502** (Cloudflare "Bad gateway").
+Container logs show:
+`SunCertPathBuilderException: unable to find valid certification path to requested target`
+when calling `https://ids-beta.knowledgespike.cricket/.well-known/openid-configuration`.
+
+### Cause
+Nginx had Docker **network aliases** for public hostnames (`ids-beta...`, `stats-api-beta...`, etc.).
+Server-side HTTPS from `acs-web`/`bbb-web` then hit **origin TLS** (Cloudflare Origin Certificate),
+which the JVM does not trust. Browsers still work because they terminate on Cloudflare's public cert.
+
+### Fix (deploy)
+1. **Do not** put public `*-beta.knowledgespike.cricket` names on the nginx service `networks.aliases` list.
+2. Keep browser traffic: Cloudflare → host :443 → nginx → app containers.
+3. Prefer **Docker DNS + HTTP** for server-side calls:
+   - `ACS_API_BASE_URL=http://acs-api:5004`
+   - `API_BASE_URL=http://bbb-api:5004` (bbb-web)
+   - API `JWKSURL=http://ids:5000/.../jwks` with public `ISSUER=https://ids-beta...`
+4. Optional belt-and-suspenders: mount `certs/beta/origin-ca.pem` (Cloudflare Origin CA)
+   and set `OIDC_CERT_PATH=/etc/ssl/certs/origin-ca.pem` (requires app images that honor it).
+
+### Docker context (local compose)
+Local `applications/compose.yaml` bind-mounts Mac paths. Use:
+```bash
+docker context use desktop-linux
+```
+not the remote `beta` SSH context. Remote daemons cannot see your laptop bind-mount paths.
+
+
+### Health / SPA auth redirect to localhost
+Anonymous SPA routes used `URLBuilder("/bff/login")`, which defaults the host to `localhost` and produced
+`Location: http://localhost/bff/login?returnUrl=...`. Fixed in acs-web `LeftOverRoutes` (relative redirect).
+Requires a new `acs-web` image deploy; not fixed by compose alone.
+
+
+### BBB Web: authentication_failed / invalid_client on /signin-oidc
+**Symptom:** After IDS login, the browser returns to `https://bbb-beta.../signin-oidc` with
+`{"error":"authentication_failed","details":"Token endpoint returned an error during code exchange"}`.
+`bbb-web` logs show a token endpoint error and IDS logs show `Invalid client secret` for `ballbyball`.
+
+**Cause:** `BBB_OIDC_CLIENT_SECRET` in `environments/beta/.env` does not match the plaintext secret
+hashed into `identity.ClientSecrets` when the identity baseline was seeded. The identity seed
+(`mariadb/init/02-init-identity-data.sh`) hashes `BBB_OIDC_CLIENT_SECRET` at first MariaDB initialization;
+a later different value in `.env` breaks only BBB while ACS can continue working.
+
+**Fix:**
+1. Set `BBB_OIDC_CLIENT_SECRET` to the value currently expected by the IdentityServer `ballbyball` client.
+   If both clients were seeded from the same value, this is often the same value as
+   `STATS_OIDC_CLIENT_SECRET`. Otherwise re-seed identity with the intended distinct secrets using
+   `./scripts/import-identity-db.sh beta` after setting both environment values.
+2. Recreate `bbb-web`; its OIDC secret is loaded at process startup:
+   `docker compose up -d --force-recreate bbb-web`.
+3. Start a new browser login after rotation; do not reuse an old authorization tab or session.
+4. Validate the running container without printing the secret:
+
+   ```bash
+   docker compose -f environments/beta/compose.yaml exec bbb-web sh -c '\
+     auth=$(printf "%s:%s" "$OIDC_CLIENT_ID" "$OIDC_CLIENT_SECRET" | base64 | tr -d "\\n"); \
+     wget -qO- --header="Authorization: Basic $auth" \
+       --header="Content-Type: application/x-www-form-urlencoded" \
+       --post-data="grant_type=client_credentials" \
+       "$OIDC_AUTHORITY/connect/token"\n   '
+   ```
+
+   A successful response is HTTP `200` with a `bbb.api` scope. Do not request `openid` as an
+   ad-hoc probe scope; that can produce `invalid_scope` even when client authentication is correct.
+   The expected interactive callback route is `/signin-oidc`.
+
+Do not confuse this with the earlier PKIX `/bff/login` 502, which was caused by TLS trust and nginx aliases.
+
+
+If `bbb-web` returns `{"error":"authentication_failed","details":"Token endpoint returned an error during code exchange"}` after returning from IdentityServer, verify the `ballbyball` client secret before changing TLS settings:
+
+1. `BBB_OIDC_CLIENT_SECRET` in `environments/beta/.env` must be the same secret seeded for the IdentityServer client `ballbyball`.
+2. If the secret is rotated, update the environment and recreate `bbb-web`; restarting the process is required because the value is loaded at startup.
+3. Start a new browser login after rotation. Discard an old login tab/session because its authorization code belongs to the previous flow.
+4. Validate the running container without printing the secret:
+
+   ```bash
+   docker compose -f environments/beta/compose.yaml exec bbb-web sh -c '\
+     auth=$(printf "%s:%s" "$OIDC_CLIENT_ID" "$OIDC_CLIENT_SECRET" | base64 | tr -d "\\n"); \
+     wget -qO- --header="Authorization: Basic $auth" \
+       --header="Content-Type: application/x-www-form-urlencoded" \
+       --post-data="grant_type=client_credentials" \
+       "$OIDC_AUTHORITY/connect/token"
+   '
+   ```
+
+A successful response is HTTP `200` with a `bbb.api` scope. Do not use `openid` as an ad-hoc probe scope; that can produce `invalid_scope` even when client authentication is correct. The expected callback route is `/signin-oidc`.

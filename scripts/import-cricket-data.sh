@@ -23,7 +23,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+SCRIPT_NAME="${IMPORT_SCRIPT_NAME:-$(basename "${BASH_SOURCE[0]}")}"
 
 INPUT_FILE=""
 ENV="local-vm"
@@ -86,6 +86,8 @@ if [ -z "$INPUT_FILE" ]; then
         CANDIDATES=(
             "/media/psf/Dropbox/dumps/mysql/ball-by-ball-upload.sql"
             "/media/psf/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz"
+            "$HOME/sql/ball-by-ball-upload.sql"
+            "$HOME/sql/ball-by-ball-upload.sql.gz"
             "$HOME/Dropbox/dumps/mysql/ball-by-ball-upload.sql"
             "$HOME/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz"
             "$HOME/ball-by-ball-upload.sql"
@@ -97,6 +99,8 @@ if [ -z "$INPUT_FILE" ]; then
         CANDIDATES=(
             "/media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql"
             "/media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz"
+            "$HOME/sql/cricketarchive-upload.sql"
+            "$HOME/sql/cricketarchive-upload.sql.gz"
             "/media/psf/Dropbox/dumps/mysql/CricketArchive/DatabaseBackup/cricketarchive-upload.sql"
             "/media/psf/Dropbox/dumps/mysql/CricketArchive/DatabaseBackup/cricketarchive-upload.sql.gz"
             "$HOME/Dropbox/dumps/mysql/cricketarchive-upload.sql"
@@ -121,13 +125,29 @@ if [ -z "$INPUT_FILE" ]; then
     done
 fi
 
-if [ -z "$INPUT_FILE" ] || [ ! -f "$INPUT_FILE" ]; then
+if [ -n "$INPUT_FILE" ] && [ ! -f "$INPUT_FILE" ]; then
+    echo "ERROR: Data file not found: $INPUT_FILE"
+    echo "The path is checked on the machine where this script is running."
+    if [ "$ENV" = "beta" ]; then
+        echo "For a dump on the VPS, run this from ~/acs-deploy on the VPS:"
+        if [ "$TARGET_DB" = "acs_ball_by_ball" ]; then
+            echo "  ./scripts/$SCRIPT_NAME ~/sql/ball-by-ball-upload.sql.gz beta"
+        else
+            echo "  ./scripts/$SCRIPT_NAME ~/sql/cricketarchive-upload.sql.gz beta"
+        fi
+        echo "For a dump on your laptop, use --remote to stream it to the VPS."
+    fi
+    exit 1
+fi
+
+if [ -z "$INPUT_FILE" ]; then
     echo "ERROR: Data file not found for database '$TARGET_DB'."
+    echo "No supported dump was found in the automatic search paths."
     echo "Please provide the file path as an argument, e.g.:"
     if [ "$TARGET_DB" = "acs_ball_by_ball" ]; then
-        echo "  ./scripts/$SCRIPT_NAME /media/psf/Dropbox/dumps/mysql/ball-by-ball-upload.sql.gz [environment]"
+        echo "  ./scripts/$SCRIPT_NAME ~/sql/ball-by-ball-upload.sql.gz [environment]"
     else
-        echo "  ./scripts/$SCRIPT_NAME /media/psf/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz [environment]"
+        echo "  ./scripts/$SCRIPT_NAME ~/sql/cricketarchive-upload.sql.gz [environment]"
     fi
     exit 1
 fi
@@ -165,10 +185,10 @@ if [ -n "$LOCAL_CONTAINER" ]; then
     echo "→ Starting data import into database '$TARGET_DB' (this may take some time for large dumps)..."
     if [ "$IS_GZIP" -eq 1 ]; then
         gunzip -c "$INPUT_FILE" | docker exec -i "$LOCAL_CONTAINER" sh -c \
-            "mariadb -u root -p\"\$(cat /run/secrets/mariadb_root_password)\" --max-allowed-packet=1G --default-character-set=utf8mb4 $TARGET_DB"
+            "mariadb --verbose -u root -p\"\$(cat /run/secrets/mariadb_root_password)\" --max-allowed-packet=1G --default-character-set=utf8mb4 $TARGET_DB"
     else
         docker exec -i "$LOCAL_CONTAINER" sh -c \
-            "mariadb -u root -p\"\$(cat /run/secrets/mariadb_root_password)\" --max-allowed-packet=1G --default-character-set=utf8mb4 $TARGET_DB" < "$INPUT_FILE"
+            "mariadb --verbose -u root -p\"\$(cat /run/secrets/mariadb_root_password)\" --max-allowed-packet=1G --default-character-set=utf8mb4 $TARGET_DB" < "$INPUT_FILE"
     fi
 
     echo "✓ Import finished! Verifying database tables..."
@@ -231,9 +251,9 @@ if [ -n "$REMOTE_TARGET" ]; then
     echo "→ Found remote MariaDB container ($REMOTE_CONTAINER)"
     echo "→ Streaming cricket data into remote database '$TARGET_DB'..."
     if [ "$IS_GZIP" -eq 1 ]; then
-        gunzip -c "$INPUT_FILE" | ssh "$REMOTE_TARGET" "docker exec -i $REMOTE_CONTAINER sh -c 'mariadb -u root -p\"\$(cat /run/secrets/mariadb_root_password)\" --max-allowed-packet=1G --default-character-set=utf8mb4 $TARGET_DB'"
+        gunzip -c "$INPUT_FILE" | ssh "$REMOTE_TARGET" "docker exec -i $REMOTE_CONTAINER sh -c 'mariadb --verbose -u root -p\"\$(cat /run/secrets/mariadb_root_password)\" --max-allowed-packet=1G --default-character-set=utf8mb4 $TARGET_DB'"
     else
-        ssh "$REMOTE_TARGET" "docker exec -i $REMOTE_CONTAINER sh -c 'mariadb -u root -p\"\$(cat /run/secrets/mariadb_root_password)\" --max-allowed-packet=1G --default-character-set=utf8mb4 $TARGET_DB'" < "$INPUT_FILE"
+        ssh "$REMOTE_TARGET" "docker exec -i $REMOTE_CONTAINER sh -c 'mariadb --verbose -u root -p\"\$(cat /run/secrets/mariadb_root_password)\" --max-allowed-packet=1G --default-character-set=utf8mb4 $TARGET_DB'" < "$INPUT_FILE"
     fi
 
     echo "✓ Import finished on remote host! Verifying database tables..."

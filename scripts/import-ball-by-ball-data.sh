@@ -21,4 +21,5 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export IMPORT_SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 exec "$SCRIPT_DIR/import-cricket-data.sh" --database acs_ball_by_ball "$@"

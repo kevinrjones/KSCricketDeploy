@@ -128,10 +128,15 @@ services:
       OIDC_CLIENT_SECRET: ${STATS_OIDC_CLIENT_SECRET:?Set STATS_OIDC_CLIENT_SECRET in environments/beta/.env}
       OIDC_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-stats-beta.knowledgespike.cricket}/signin-oidc
       OIDC_POST_LOGOUT_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-stats-beta.knowledgespike.cricket}/
-      API_BASE_URL: https://${ACS_API_HOSTNAME:-stats-api-beta.knowledgespike.cricket}
+      # Server-side API calls stay on the Docker network (HTTP). Public HTTPS hostnames are for browsers/Cloudflare.
+      ACS_API_BASE_URL: http://acs-api:5004
+      API_BASE_URL: http://acs-api:5004
+      # Optional: mount Cloudflare Origin CA and set this if you re-enable nginx network aliases for *.knowledgespike.cricket
+      OIDC_CERT_PATH: /etc/ssl/certs/origin-ca.pem
       KTOR_ENVIRONMENT: beta
     volumes:
       - beta-acs-web-logs:/opt/app/logs
+      - ../../certs/beta/origin-ca.pem:/etc/ssl/certs/origin-ca.pem:ro
     networks:
       - acs-net
     depends_on:
@@ -154,7 +159,8 @@ services:
       PORT: "5004"
       HOST: 0.0.0.0
       JDBCURL: jdbc:mariadb://mariadb:3306/cricketarchive
-      JWKSURL: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/.well-known/openid-configuration/jwks
+      # Fetch JWKS over the Docker network; ISSUER remains the public URL embedded in tokens.
+      JWKSURL: http://ids:5000/.well-known/openid-configuration/jwks
       ISSUER: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
       CORS_ORIGINS: https://${ACS_WEB_HOSTNAME:-stats-beta.knowledgespike.cricket}
     secrets:
@@ -185,10 +191,13 @@ services:
       OIDC_CLIENT_SECRET: ${BBB_OIDC_CLIENT_SECRET:?Set BBB_OIDC_CLIENT_SECRET in environments/beta/.env}
       OIDC_REDIRECT_URI: https://${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}/signin-oidc
       OIDC_POST_LOGOUT_REDIRECT_URI: https://${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}/
-      API_BASE_URL: https://${BBB_API_HOSTNAME:-bbb-api-beta.knowledgespike.cricket}
+      # Server-side API calls stay on the Docker network (HTTP).
+      API_BASE_URL: http://bbb-api:5004
+      OIDC_CERT_PATH: /etc/ssl/certs/origin-ca.pem
       KTOR_ENVIRONMENT: beta
     volumes:
       - beta-bbb-web-logs:/opt/app/logs
+      - ../../certs/beta/origin-ca.pem:/etc/ssl/certs/origin-ca.pem:ro
     networks:
       - acs-net
     depends_on:
@@ -219,11 +228,11 @@ services:
       HOST: 0.0.0.0
       API_PORT: "5004"
       API_HOST: 0.0.0.0
-      JWT_JWKS_URL: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/.well-known/openid-configuration/jwks
+      JWT_JWKS_URL: http://ids:5000/.well-known/openid-configuration/jwks
       JWT_ISSUER: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
       DB_JDBC_URL: jdbc:mariadb://mariadb:3306/acs_ball_by_ball
       JDBCURL: jdbc:mariadb://mariadb:3306/acs_ball_by_ball
-      JWKSURL: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/.well-known/openid-configuration/jwks
+      JWKSURL: http://ids:5000/.well-known/openid-configuration/jwks
       ISSUER: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
       CORS_ORIGINS: https://${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}
     secrets:
@@ -250,15 +259,13 @@ services:
       - ../../nginx/beta.conf:/etc/nginx/conf.d/default.conf:ro
       - ../../certs/beta/server.crt:/etc/nginx/certs/server.crt:ro
       - ../../certs/beta/server.key:/etc/nginx/certs/server.key:ro
+    # IMPORTANT: do NOT add network aliases for public *-beta.knowledgespike.cricket hostnames.
+    # Those aliases make container->HTTPS calls hit the origin cert (Cloudflare Origin CA), which
+    # Java does not trust by default, breaking /bff/login OIDC discovery with PKIX errors.
+    # Browsers still reach nginx via Cloudflare -> host ports 80/443. Server-side calls should use
+    # Docker DNS names (ids, acs-api, bbb-api) over HTTP, or public DNS through Cloudflare.
     networks:
-      acs-net:
-        aliases:
-          - ${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
-          - ${ADMINUI_HOSTNAME:-adminui-beta.knowledgespike.cricket}
-          - ${ACS_WEB_HOSTNAME:-stats-beta.knowledgespike.cricket}
-          - ${ACS_API_HOSTNAME:-stats-api-beta.knowledgespike.cricket}
-          - ${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}
-          - ${BBB_API_HOSTNAME:-bbb-api-beta.knowledgespike.cricket}
+      - acs-net
     depends_on:
       ids:
         condition: service_started

@@ -1,5 +1,59 @@
 # Project Memory
 
+## Task: Diagnose Beta ACS Frontpage 502
+- **Date/Time Completed**: 2026-09-22 17:03
+- **What Was Shipped**:
+  - Documented that `https://stats-beta.knowledgespike.cricket/api/frontpage/getlatestmatches` is served by the ACS Web BFF, which calls the internal `http://acs-api:5004/api/frontpage/getrecentmatches` route.
+  - Added Beta troubleshooting for BFF 502 responses caused by ACS API/database failures during or after an incomplete `cricketarchive` import, and for healthy empty results caused by stale match data.
+- **Key Decisions**:
+  - Diagnose this request through `acs-web` and `acs-api` logs rather than treating it as a direct request to `stats-api-beta`.
+  - Keep the deployment routing unchanged; an empty front page with HTTP 200 is expected when the newest imported matches fall outside the application’s two-day window.
+- **Gotchas**:
+  - A missing `cricketarchive.Tournaments` table can surface to the browser as a generic 502 from the Web BFF.
+  - The public ACS API route is not interchangeable with the Web BFF route: `getlatestmatches` through `stats-beta` maps internally to `getrecentmatches` on `acs-api`.
+- **Test Coverage Areas**:
+  - Existing live checks showed the `stats-beta` front-page request returning HTTP 200 with an empty data set after the database was available, while ACS and BBB heartbeat routes remained healthy.
+  - Documented log and schema checks for distinguishing import/database failures from an expected empty front page.
+
+## Task: Preserve Ball-by-Ball Importer Name in Errors
+- **Date/Time Completed**: 2026-09-22 16:40
+- **What Was Shipped**:
+  - Preserved the invoking script name when `import-ball-by-ball-data.sh` delegates to the shared import engine.
+  - Missing-file and usage messages from the dedicated wrapper now reference `import-ball-by-ball-data.sh`; direct calls to `import-cricket-data.sh` retain their existing name.
+- **Key Decisions**:
+  - Passed the display name through `IMPORT_SCRIPT_NAME` while retaining the shared `exec`-based import implementation.
+- **Test Coverage Areas**:
+  - Shell syntax and explicit missing-path behavior for both importer entry points.
+
+## Task: Clarify Beta CricketArchive Import File Paths
+- **Date/Time Completed**: 2026-09-22 16:21
+- **What Was Shipped**:
+  - Updated `scripts/import-cricket-data.sh` to report the exact missing explicit path instead of presenting it as an auto-detection failure.
+  - Added `~/sql/` candidates for CricketArchive and Ball-by-Ball dumps, matching the VPS dump layout.
+  - Updated `README.md` and `docs/beta-deploy.md` with VPS-local `~/sql` commands and laptop-to-VPS `--remote` examples.
+- **Key Decisions**:
+  - Dump paths are resolved on the machine running the script; a remote Docker context does not make a local filesystem path available on the VPS.
+  - Preserve the existing remote streaming implementation rather than copying or deleting large dump files on the VPS.
+- **Gotchas**:
+  - `/home/kevin/sql/cricketarchive-upload.sql.gz` works only when the script runs on the VPS where that file exists; from the laptop, use the laptop path with `--remote`.
+- **Test Coverage Areas**:
+  - Shell syntax validation and missing-path behavior for explicit and auto-detected inputs.
+
+## Task: Fix Beta ACS API health check routing
+- **Date/Time Completed**: 2026-09-22 14:56
+- **What Was Shipped**:
+  - Synchronized `nginx/beta.conf` to the Beta VPS and recreated the Nginx container from the VPS checkout.
+  - Restored public routing for the canonical `stats-beta.knowledgespike.cricket` and `stats-api-beta.knowledgespike.cricket` hostnames while retaining the legacy `web-beta` and `api-beta` aliases.
+  - Updated `docs/beta-deploy.md` and `README.md` with the canonical hostnames, VPS synchronization procedure, and troubleshooting for stale Nginx virtual-host mappings.
+- **Key Decisions**:
+  - Deployment Compose commands that recreate bind-mounted services must run on the VPS; invoking a remote Docker context from the laptop can resolve host paths against the laptop filesystem.
+  - Treat `stats-*` as the canonical Beta ACS DNS names and retain `web-/api-beta` only for backward compatibility.
+- **Gotchas**:
+  - An HTTPS hostname missing from `nginx/beta.conf` can fall through to the first SSL virtual host (`ids`), producing IdentityServer HTML at `/` and a 404 for the ACS heartbeat route instead of an upstream connection error.
+- **Test Coverage Areas**:
+  - Verified `https://stats-api-beta.knowledgespike.cricket/heartbeat/alive` returns ACS heartbeat JSON with HTTP 200.
+  - Verified `stats-beta` returns HTTP 200 HTML, BBB API heartbeat remains HTTP 200, and the VPS Nginx configuration passes `nginx -t`.
+
 ## Task: Create Step-by-Step Beta Deployment Guide (docs/beta-deploy.md)
 - **Date/Time Completed**: 2026-09-22 08:55
 - **What Was Shipped**:
@@ -209,3 +263,32 @@
   - Verified container root password access inside `acs-local-vm-mariadb-1`.
   - Verified table creation and sample data import (`CountryCodes`, 266 rows) into `cricketarchive` on the running VM.
   - Verified `acs-api` health endpoint `/heartbeat/alive`.
+
+## Beta login 502 / origin TLS trust — 2026-09-22 15:41
+**What was shipped**
+- Removed nginx Docker network aliases for public beta hostnames (root cause of PKIX on /bff/login).
+- Pointed server-side API/JWKS URLs at internal Docker HTTP services.
+- Added Cloudflare Origin CA file `certs/beta/origin-ca.pem` and OIDC_CERT_PATH wiring for future image deploys.
+- Documented local Docker context requirement (`desktop-linux` vs remote `beta`).
+
+**Key decisions**
+- Public hostname aliases on the compose network are unsafe when nginx terminates with a Cloudflare Origin cert.
+- Browser TLS stays on Cloudflare; container-to-container stays on Docker DNS/HTTP where possible.
+
+**Gotchas**
+- Existing app images only applied `OIDC_CERT_PATH` when `DEVELOPMENT=true` until acs-web/bbb-web code updates are rebuilt and pushed.
+- Alias removal alone fixes login with current images because OIDC discovery then uses Cloudflare public certs.
+
+## BBB login invalid_client secret mismatch — 2026-09-22 15:59
+**What was shipped**
+- Diagnosed bbb-beta `/signin-oidc` authentication_failed as IdentityServer `Invalid client secret` for `ballbyball`.
+- Aligned `BBB_OIDC_CLIENT_SECRET` with the secret hashed at identity seed (same as working `STATS_OIDC_CLIENT_SECRET`).
+- Documented troubleshooting in beta-deploy.md.
+
+**Key decisions**
+- Prefer aligning `.env` to the already-seeded Identity hash over re-seeding production identity data for a quick fix.
+- ACS and BBB may share the same seeded secret when defaults were used at first MariaDB init.
+
+**Gotchas**
+- `generate-beta-secrets.sh` does not automatically write OIDC client secrets into `.env`; mismatched later edits only break the client whose secret diverged.
+- SPA path `/sign-oidc` is unrelated (static route); real callback is `/signin-oidc`.
