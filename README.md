@@ -6,7 +6,9 @@
 
 **Laptop local VM (hosts file + private CA):** follow the full walkthrough → **[docs/local-vm-deploy.md](docs/local-vm-deploy.md)**.
 
-**Beta / VPS (short form):**
+**Beta / VPS (Cloudflare + public IP):** follow the full walkthrough → **[docs/beta-deploy.md](docs/beta-deploy.md)**.
+
+**Short form (Beta):**
 
 ```bash
 # 1. Clone this repo onto the VPS
@@ -77,7 +79,8 @@ All services share one Docker network. nginx routes by `Host` header. Only ports
 │   ├── import-cricket-data.sh          # Import CricketArchive / custom dump into MariaDB
 │   ├── import-ball-by-ball-data.sh     # Import Ball-by-Ball dump into MariaDB
 │   ├── generate-local-vm-certs.sh      # Private CA + nginx cert for *-vm hostnames
-│   └── generate-local-vm-secrets.sh    # DB/OIDC-related secret files + DP PFX
+│   ├── generate-local-vm-secrets.sh    # DB/OIDC-related secret files + DP PFX for local-vm
+│   └── generate-beta-secrets.sh        # DB/OIDC-related secret files + DP PFX for beta
 ├── private/                # Per-env secret *files* (gitignored bodies; see private/README.md)
 │   ├── .secret-names       # Cheatsheet only (not loaded by Compose)
 │   ├── README.md
@@ -85,6 +88,7 @@ All services share one Docker network. nginx routes by `Host` header. Only ports
 │   └── local-vm/
 └── docs/
     ├── local-vm-deploy.md  # Step-by-step laptop VM: hosts, certs, deploy
+    ├── beta-deploy.md      # Step-by-step remote VPS: Cloudflare, origin cert, deploy
     └── migration-notes.md  # Notes on migrating from Swarm
 ```
 

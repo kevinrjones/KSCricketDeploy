@@ -1,5 +1,26 @@
 # Project Memory
 
+## Task: Create Step-by-Step Beta Deployment Guide (docs/beta-deploy.md)
+- **Date/Time Completed**: 2026-09-22 08:55
+- **What Was Shipped**:
+  - Created `docs/beta-deploy.md` mirroring the structure and depth of `docs/local-vm-deploy.md`, tailored for the remote Beta VPS environment.
+  - Documented end-to-end Beta deployment: Cloudflare DNS A records, proxy status (orange cloud), Full (strict) SSL/TLS mode, Cloudflare Origin Certificate generation, Docker engine setup, UFW firewall configuration, environment variables, secret generation, deployment execution, health verification, MariaDB data import (`cricketarchive` and `acs_ball_by_ball`), Identity baseline seeding, and troubleshooting.
+  - Created `scripts/generate-beta-secrets.sh` to automate secret generation and Data Protection PFX creation for `beta` matching `local-vm`.
+  - Updated `environments/beta/.env` with canonical `*-beta.knowledgespike.cricket` hostnames (`stats-beta`, `stats-api-beta`, `bbb-beta`, `bbb-api-beta`).
+  - Fixed syntax error and added `stats-beta` and `stats-api-beta` server name aliases to `nginx/beta.conf` alongside legacy `web-beta` and `api-beta` names.
+  - Updated `README.md` to link directly to `docs/beta-deploy.md` in Quick Start and Repository Layout sections.
+- **Key Decisions**:
+  - Mirrored the 10-step pedagogical structure from `local-vm-deploy.md` to ensure parity between local VM and remote VPS workflows.
+  - Clarified key architectural differences: Beta uses Cloudflare Origin CA certificates and public CA trust in the JVM, eliminating the need for custom Java `cacerts` truststores required in `local-vm`.
+  - Added both `stats-beta` and `web-beta` (as well as `stats-api-beta` and `api-beta`) to Nginx server names to support both modern and legacy URLs without routing conflicts.
+- **Gotchas**:
+  - Unlike local VM where self-signed CA certificates require custom Java truststore mounts (`cacerts`), Beta routes through Cloudflare over public TLS; JVM applications do not require custom `cacerts` mounts because Cloudflare public certificates are trusted by default in official OpenJDK truststores.
+  - In `nginx/beta.conf`, syntax errors at the end of the file caused `nginx -t` failures; verified syntax using Docker container validation.
+- **Test Coverage Areas**:
+  - Validated Nginx configuration syntax with `nginx -t` inside `nginx:stable-alpine`.
+  - Validated `scripts/generate-beta-secrets.sh` with `bash -n`.
+  - Validated Docker Compose dry-run for both `environments/beta` and `environments/local-vm`.
+
 ## Task: Fix BBB API 502 Bad Gateway and IdentityServer unauthorized_client Error
 - **Date/Time Completed**: 2026-09-21 17:00
 - **What Was Shipped**:
