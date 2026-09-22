@@ -26,8 +26,8 @@ services:
       MARIADB_USER: ${MARIADB_USER:-identity}
       IDS_HOSTNAME: ${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
       ADMINUI_HOSTNAME: ${ADMINUI_HOSTNAME:-adminui-beta.knowledgespike.cricket}
-      ACS_WEB_HOSTNAME: ${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}
-      ACS_API_HOSTNAME: ${ACS_API_HOSTNAME:-api-beta.knowledgespike.cricket}
+      ACS_WEB_HOSTNAME: ${ACS_WEB_HOSTNAME:-stats-beta.knowledgespike.cricket}
+      ACS_API_HOSTNAME: ${ACS_API_HOSTNAME:-stats-api-beta.knowledgespike.cricket}
       BBB_WEB_HOSTNAME: ${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}
       BBB_API_HOSTNAME: ${BBB_API_HOSTNAME:-bbb-api-beta.knowledgespike.cricket}
     secrets:
@@ -126,9 +126,9 @@ services:
       OIDC_AUTHORITY: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
       OIDC_CLIENT_ID: ${STATS_OIDC_CLIENT_ID:-acsstats}
       OIDC_CLIENT_SECRET: ${STATS_OIDC_CLIENT_SECRET:?Set STATS_OIDC_CLIENT_SECRET in environments/beta/.env}
-      OIDC_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}/signin-oidc
-      OIDC_POST_LOGOUT_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}/
-      API_BASE_URL: https://${ACS_API_HOSTNAME:-api-beta.knowledgespike.cricket}
+      OIDC_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-stats-beta.knowledgespike.cricket}/signin-oidc
+      OIDC_POST_LOGOUT_REDIRECT_URI: https://${ACS_WEB_HOSTNAME:-stats-beta.knowledgespike.cricket}/
+      API_BASE_URL: https://${ACS_API_HOSTNAME:-stats-api-beta.knowledgespike.cricket}
       KTOR_ENVIRONMENT: beta
     volumes:
       - beta-acs-web-logs:/opt/app/logs
@@ -156,7 +156,7 @@ services:
       JDBCURL: jdbc:mariadb://mariadb:3306/cricketarchive
       JWKSURL: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/.well-known/openid-configuration/jwks
       ISSUER: https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
-      CORS_ORIGINS: https://${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}
+      CORS_ORIGINS: https://${ACS_WEB_HOSTNAME:-stats-beta.knowledgespike.cricket}
     secrets:
       - jdbc.username
       - jdbc.password
@@ -255,8 +255,8 @@ services:
         aliases:
           - ${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}
           - ${ADMINUI_HOSTNAME:-adminui-beta.knowledgespike.cricket}
-          - ${ACS_WEB_HOSTNAME:-web-beta.knowledgespike.cricket}
-          - ${ACS_API_HOSTNAME:-api-beta.knowledgespike.cricket}
+          - ${ACS_WEB_HOSTNAME:-stats-beta.knowledgespike.cricket}
+          - ${ACS_API_HOSTNAME:-stats-api-beta.knowledgespike.cricket}
           - ${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}
           - ${BBB_API_HOSTNAME:-bbb-api-beta.knowledgespike.cricket}
     depends_on:
