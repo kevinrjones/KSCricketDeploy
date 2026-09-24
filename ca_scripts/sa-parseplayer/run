@@ -1,0 +1,16 @@
+#!/bin/sh
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/../lib/common.sh"
+ca_init "$SCRIPT_DIR"
+ca_require_archive
+cd "$SCRIPT_DIR" || exit 1
+
+exec ./bin/sa-parseplayer \
+             -bd "$CA_ARCHIVE_DIR" \
+             -pd Players \
+             -od Officials \
+             -pjd json.players \
+             -ojd json.officials
+
+

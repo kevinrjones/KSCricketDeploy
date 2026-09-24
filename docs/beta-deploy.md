@@ -275,6 +275,7 @@ This script automatically creates:
 - `jdbc.username` (`cricketarchive`) & `jdbc.password` — Credentials for the ACS and BBB APIs.
 - `DataProtection__Certificate__Password` & `certs/beta/ids-mysql-dp.pfx` — ASP.NET Data Protection encryption key.
 - `AdminUIClientSecret` & `UsernamePolicy__Secret` — AdminUI operational credentials.
+- `MailKit__SmtpServer`, `MailKit__Port`, `MailKit__Username`, and `MailKit__Password` — SMTP settings mounted into IdentityServer.
 
 ### Step 5.2: Set vendor license and credentials
 
@@ -288,10 +289,58 @@ printf '%s' 'PASTE_YOUR_ADMINUI_LICENSE_KEY_HERE' > private/beta/LicenseKey
 printf '%s' 'YOUR_GOOGLE_CLIENT_ID' > private/beta/Authentication__Google__ClientId
 printf '%s' 'YOUR_GOOGLE_CLIENT_SECRET' > private/beta/Authentication__Google__ClientSecret
 
-# 3. Set file permissions so container users can read secrets
+# 3. IdentityServer SMTP settings (required for Beta email delivery)
+printf '%s' 'smtp.gmail.com' > private/beta/MailKit__SmtpServer
+printf '%s' '587' > private/beta/MailKit__Port
+printf '%s' 'YOUR_SMTP_USERNAME' > private/beta/MailKit__Username
+printf '%s' 'YOUR_SMTP_APP_PASSWORD' > private/beta/MailKit__Password
+
+# 4. Set file permissions so container users can read secrets
 chmod 755 private/beta certs/beta
 chmod 644 private/beta/*
 chmod 644 certs/beta/ids-mysql-dp.pfx
+```
+
+Use the SMTP provider's app password where the provider requires one; do not
+use the account's normal login password if SMTP application passwords are
+enabled. The four `MailKit__*` files are mounted by the Beta `ids` service and
+must contain values other than the generator's `changeme-*` placeholders before
+starting the stack.
+
+### Step 5.3: Verify IdentityServer email delivery
+
+Run these checks on the Beta VPS after starting or recreating `ids`:
+
+```bash
+cd ~/acs-deploy/environments/beta
+
+# Confirm the four mounted files exist and are not empty or generator placeholders.
+for secret in MailKit__SmtpServer MailKit__Port MailKit__Username MailKit__Password; do
+  value_file="../../private/beta/$secret"
+  if [ ! -s "$value_file" ] || grep -q '^changeme-' "$value_file"; then
+    printf 'INVALID SMTP secret: %s\n' "$secret"
+    exit 1
+  fi
+done
+printf '%s\n' 'SMTP secret files are present and non-placeholder.'
+
+# After submitting a registration, inspect IdentityServer's recent email logs.
+docker compose --env-file .env logs --since=15m ids | grep -Ei 'email|smtp|mailkit|send|confirm'
+```
+
+The log check should show the registration email being sent without an SMTP
+authentication or connection error. Confirm delivery in the provider's Sent
+mail folder as well as the recipient's inbox or spam folder. The confirmation
+link should use the public `https://ids-beta.knowledgespike.cricket/` origin;
+follow it, then verify that the account is marked as email-confirmed. A message
+being accepted by SMTP but not appearing in the inbox is a provider
+deliverability or spam-filtering issue, not a Docker Compose deployment issue.
+
+If the files are correct but the values were changed after `ids` started,
+recreate the service so it receives the updated secret mounts:
+
+```bash
+docker compose --env-file .env up -d --force-recreate ids
 ```
 
 ---
@@ -367,6 +416,146 @@ On your **Beta VPS**, start the stack:
 > Run the Compose command on the VPS. Running it from a laptop against a
 > remote Docker context can resolve bind-mounted secret and certificate paths
 > on the laptop instead of on the VPS.
+
+---
+
+## Step 7.1: Run the CricketArchive maintenance scripts
+
+The checked-in scripts under `ca_scripts/` are installed on the VPS as
+`/home/kevin/cron/`, replacing the older scheduled runner set. The complete
+directory must be installed because `/home/kevin/cron/run` calls the sibling
+stage directories and `lib/common.sh`; copying only `run` will fail.
+
+The runner resolves its files from `/home/kevin/cron/`, so it is safe for cron
+to invoke it without first changing directory. It uses the same
+`jdbc.username` and `jdbc.password` files as the ACS API, so database
+credentials do not need to be copied into a script or shell history.
+
+Temporarily comment out the existing runner entry in `crontab -e`, or choose a
+maintenance window when it cannot start, before synchronizing the tree. This
+prevents cron from launching a partially replaced set of files.
+
+Before replacing the old scripts, make a backup and synchronize the complete
+tree from the deployment checkout. Run this on the VPS after pulling the
+deployment checkout:
+
+```bash
+cd ~/acs-deploy
+tar -C /home/kevin -czf \
+  "$HOME/cron-before-acs-runners-$(date +%Y%m%d%H%M%S).tar.gz" cron
+rsync -a --delete \
+  --exclude '/config.env' \
+  --exclude '/credentials.env' \
+  --exclude '/db.log' \
+  --exclude '/cron.log' \
+  --exclude '*/logs/' \
+  --exclude '*/json.*' \
+  --exclude '*/grounds*.json' \
+  --exclude '*/Scorecards/' \
+  --exclude '*/Scorecards.nightly/' \
+  ca_scripts/ /home/kevin/cron/
+```
+
+If `/home/kevin/cron` contains unrelated files, move them out before using
+`--delete`; otherwise they will be removed as part of replacing the old
+script set. Restore or add the cron entry only after the replacement and
+configuration checks below are complete.
+
+Create the ignored runtime files in the installed directory:
+
+```bash
+cp /home/kevin/cron/config.env.example /home/kevin/cron/config.env
+cp /home/kevin/cron/credentials.env.example /home/kevin/cron/credentials.env
+chmod 600 /home/kevin/cron/config.env /home/kevin/cron/credentials.env
+$EDITOR /home/kevin/cron/config.env /home/kevin/cron/credentials.env
+```
+
+Because the installed runner is outside the checkout, set the JDBC secret
+paths explicitly in `/home/kevin/cron/config.env`:
+
+```bash
+CA_DB_USER_FILE=/home/kevin/acs-deploy/private/beta/jdbc.username
+CA_DB_PASSWORD_FILE=/home/kevin/acs-deploy/private/beta/jdbc.password
+```
+
+Use absolute paths for `CA_ARCHIVE_DIR`, `CA_DUMP_DIR`, and `CA_DUMP_FILE` as
+well. The Beta runner connects from the host through the loopback-only mapping
+`jdbc:mariadb://127.0.0.1:3307/cricketarchive`; containers continue to use
+`jdbc:mariadb://mariadb:3306/...` on the Docker network. See
+[the runner guide](../ca_scripts/README.md) for single-stage commands and
+troubleshooting.
+
+Add the scheduled command with `crontab -e`; use an absolute path and explicit
+`PATH` because cron has a minimal environment:
+
+```cron
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/bin
+
+15 2 * * * /home/kevin/cron/run >>/home/kevin/cron/cron.log 2>&1
+```
+
+The top-level runner writes database-export diagnostics to
+`/home/kevin/cron/db.log`. Do not put credentials in the crontab entry.
+
+### Rotate the cron logs
+
+Install `/etc/logrotate.d/acs-cron` on the VPS. Because the installed runner
+directory is writable by the deployment user, include `su kevin kevin`; without
+that directive logrotate may skip the logs with an insecure-parent-directory
+warning:
+
+```text
+/home/kevin/cron/cron.log /home/kevin/cron/db.log {
+    daily
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    dateext
+    create 0640 kevin kevin
+    su kevin kevin
+}
+```
+
+Create the configuration as root and test it before forcing a rotation:
+
+```bash
+sudo install -o root -g root -m 0644 /dev/stdin /etc/logrotate.d/acs-cron <<'EOF'
+/home/kevin/cron/cron.log /home/kevin/cron/db.log {
+    daily
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    dateext
+    create 0640 kevin kevin
+    su kevin kevin
+}
+EOF
+
+namei -l /home/kevin/cron/cron.log
+sudo logrotate -d /etc/logrotate.d/acs-cron
+```
+
+The parent directory should be owned by `kevin` and not writable by an
+unrelated group or by everyone. If necessary, and only if no shared service
+requires different permissions, correct it with:
+
+```bash
+sudo chown kevin:kevin /home/kevin/cron
+chmod 0755 /home/kevin/cron
+```
+
+To rotate immediately after the dry run:
+
+```bash
+sudo logrotate -f /etc/logrotate.d/acs-cron
+ls -lh /home/kevin/cron/cron.log*
+ls -lh /home/kevin/cron/db.log*
+```
 
 ---
 
@@ -627,6 +816,8 @@ The deploy script pulls newer image layers and recreates updated containers with
 | **Cloudflare Error 525: SSL Handshake Failed** | SSL/TLS mode is Full (strict) but `server.crt` / `server.key` are missing, invalid, or expired | Check `certs/beta/server.crt` and `server.key`. Ensure they contain a valid Cloudflare Origin Certificate for `*.knowledgespike.cricket`. Check Nginx logs: `docker compose logs nginx`. |
 | **Cloudflare Error 520 / 502 Bad Gateway** | Upstream application container crashed or is not responding | Check container logs (e.g. `docker compose logs -f acs-web` or `bbb-api`). |
 | **IdentityServer fails on boot** | Missing Google OAuth credentials | Ensure `Authentication__Google__ClientId` and `Authentication__Google__ClientSecret` have values in `private/beta/`. |
+| **IdentityServer email delivery fails** | One or more `MailKit__*` files are missing, still contain `changeme-*`, or contain an invalid SMTP credential | Set `MailKit__SmtpServer`, `MailKit__Port`, `MailKit__Username`, and `MailKit__Password` in `private/beta/`, then recreate `ids`: `docker compose --env-file environments/beta/.env -f environments/beta/compose.yaml up -d --force-recreate ids`. |
+| **Registration reports success but no confirmation email is visible** | SMTP accepted the message, but the provider or recipient mailbox filtered it | Check the `ids` logs and the provider's Sent folder first, then check recipient spam/junk folders. Verify the confirmation URL uses `https://ids-beta.knowledgespike.cricket/`; do not change Compose until the logs show an SMTP error. |
 | **AdminUI shows license error** | Missing or expired Duende license | Verify `private/beta/LicenseKey` file contents. |
 | **ACS API heartbeat returns 404, or `stats-*` shows IdentityServer HTML** | The VPS Nginx configuration is stale or the request hostname is not listed in `nginx/beta.conf`; an unmatched HTTPS request falls through to the default IdentityServer virtual host | Ensure `stats-beta` and `stats-api-beta` are present in the VPS copy of `nginx/beta.conf`, synchronize the file if necessary, then run `docker compose --env-file environments/beta/.env -f environments/beta/compose.yaml up -d --force-recreate nginx` on the VPS. Confirm the Cloudflare DNS record points to that VPS. |
 | **`stats-beta/.../api/frontpage/getlatestmatches` returns 502** | This is the ACS Web BFF route, not a direct Nginx proxy to the public ACS API hostname. `acs-web` calls `http://acs-api:5004/api/frontpage/getrecentmatches`; a missing `cricketarchive` table during or after an incomplete import, or an unavailable/slow `acs-api`, makes the BFF return 502 | Check `docker compose --env-file .env logs --tail=200 acs-web acs-api` from `environments/beta`. Look for MariaDB errors such as `Table 'cricketarchive.Tournaments' doesn't exist`, wait for the import to finish, and verify that `Tournaments`, `Matches`, and `Innings` exist in `cricketarchive`. The public `stats-api-beta` endpoint uses a different route and is not the correct diagnostic for this Web BFF request. |

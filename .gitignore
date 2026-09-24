@@ -39,3 +39,12 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# CricketArchive maintenance runner configuration and generated data
+ca_scripts/config.env
+ca_scripts/credentials.env
+ca_scripts/**/logs/
+ca_scripts/**/json.*
+ca_scripts/**/grounds*.json
+ca_scripts/**/Scorecards/
+ca_scripts/**/Scorecards.nightly/

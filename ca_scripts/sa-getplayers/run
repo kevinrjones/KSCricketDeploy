@@ -1,0 +1,43 @@
+#!/bin/sh
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/../lib/common.sh"
+ca_init "$SCRIPT_DIR"
+ca_require_archive
+ca_require_db_credentials
+cd "$SCRIPT_DIR" || exit 1
+
+if [ -n "${CRICKETARCHIVE_PROXY_HOST:-}" ] && [ -n "${CRICKETARCHIVE_PROXY_PORT:-}" ]; then
+    if [ -n "${CRICKETARCHIVE_PROXY_USER:-}" ]; then
+        ./bin/sa-getplayers \
+                     -bd "$CA_ARCHIVE_DIR" \
+                     -pd Players \
+                     -od Officials \
+                     -c "$CA_JDBC_URL" \
+                     -u "$CA_DB_USER" \
+                     -p "$CA_DB_PASSWORD" \
+                     -ph "$CRICKETARCHIVE_PROXY_HOST" \
+                     -pp "$CRICKETARCHIVE_PROXY_PORT" \
+                     -pu "$CRICKETARCHIVE_PROXY_USER"
+    else
+        ./bin/sa-getplayers \
+                     -bd "$CA_ARCHIVE_DIR" \
+                     -pd Players \
+                     -od Officials \
+                     -c "$CA_JDBC_URL" \
+                     -u "$CA_DB_USER" \
+                     -p "$CA_DB_PASSWORD" \
+                     -ph "$CRICKETARCHIVE_PROXY_HOST" \
+                     -pp "$CRICKETARCHIVE_PROXY_PORT"
+    fi
+else
+    ./bin/sa-getplayers \
+                 -bd "$CA_ARCHIVE_DIR" \
+                 -pd Players \
+                 -od Officials \
+                 -c "$CA_JDBC_URL" \
+                 -u "$CA_DB_USER" \
+                 -p "$CA_DB_PASSWORD"
+fi
+
+

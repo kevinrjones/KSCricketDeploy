@@ -1,0 +1,17 @@
+#!/bin/sh
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/../lib/common.sh"
+ca_init "$SCRIPT_DIR"
+ca_require_archive
+ca_require_db_credentials
+cd "$SCRIPT_DIR" || exit 1
+
+exec ./bin/sa-update-officials \
+             -bd "$CA_ARCHIVE_DIR" \
+             -jd json.officials \
+             -c "$CA_JDBC_URL" \
+             -u "$CA_DB_USER" \
+             -p "$CA_DB_PASSWORD"
+
+

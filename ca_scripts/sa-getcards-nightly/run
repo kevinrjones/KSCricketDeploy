@@ -1,0 +1,25 @@
+#!/bin/sh
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/../lib/common.sh"
+ca_init "$SCRIPT_DIR"
+ca_require_archive
+cd "$SCRIPT_DIR" || exit 1
+
+run_getcards_nightly() {
+    day="$1"
+
+    if [ -n "${CRICKETARCHIVE_PROXY_HOST:-}" ] && [ -n "${CRICKETARCHIVE_PROXY_PORT:-}" ]; then
+        if [ -n "${CRICKETARCHIVE_PROXY_USER:-}" ]; then
+            ./bin/sa-getcards-nightly -o -bd "$CA_ARCHIVE_DIR" -scd Scorecards -nscd Scorecards.nightly -d "$day" -ph "$CRICKETARCHIVE_PROXY_HOST" -pp "$CRICKETARCHIVE_PROXY_PORT" -pu "$CRICKETARCHIVE_PROXY_USER"
+        else
+            ./bin/sa-getcards-nightly -o -bd "$CA_ARCHIVE_DIR" -scd Scorecards -nscd Scorecards.nightly -d "$day" -ph "$CRICKETARCHIVE_PROXY_HOST" -pp "$CRICKETARCHIVE_PROXY_PORT"
+        fi
+    else
+        ./bin/sa-getcards-nightly -o -bd "$CA_ARCHIVE_DIR" -scd Scorecards -nscd Scorecards.nightly -d "$day"
+    fi
+}
+
+for day in 7 6 5 4 3 2 1; do
+    run_getcards_nightly "$day"
+done

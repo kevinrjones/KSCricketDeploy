@@ -1,5 +1,77 @@
 # Project Memory
 
+## Task: Configure Log Rotation for VPS Cron Logs
+- **Date/Time Completed**: 2026-09-24 10:14
+- **What Was Shipped**:
+  - Updated the CricketArchive runner and Beta deployment guides with a logrotate configuration for `/home/kevin/cron/cron.log` and `/home/kevin/cron/db.log`.
+  - Documented the `su kevin kevin` directive, parent-directory permission checks, dry-run validation, and forced-rotation command.
+- **Key Decisions**:
+  - Keep logrotate configuration under `/etc/logrotate.d/acs-cron` on the VPS rather than committing host-specific system files to the deployment checkout.
+  - Preserve user-owned rotated logs with `create 0640 kevin kevin` and rotate fourteen daily archives with compression.
+- **Gotchas**:
+  - Logrotate skips user-writable parent directories unless the stanza explicitly supplies the rotation user and group with `su`.
+- **Test Coverage Areas**:
+  - Documentation and configuration syntax were checked locally; VPS `logrotate -d` and `logrotate -f` must be run on the target host.
+
+## Task: Install CricketArchive Runners in the VPS Cron Directory
+- **Date/Time Completed**: 2026-09-23 16:55
+- **What Was Shipped**:
+  - Confirmed that the runner tree can replace the existing `/home/kevin/cron` scripts when the complete directory is synchronized, including stage directories, binaries, and `lib/common.sh`.
+  - Updated `ca_scripts/README.md` and `docs/beta-deploy.md` with the backup/synchronization procedure, runtime configuration location, absolute secret-path requirements, and cron entry.
+- **Key Decisions**:
+  - Keep the checked-in source under `ca_scripts/`, but install the scheduled Beta copy at `/home/kevin/cron/` so the existing cron contract remains `/home/kevin/cron/run`.
+  - Exclude runtime configuration and generated data during synchronization; use absolute paths to `~/acs-deploy/private/beta/jdbc.*` because relative `../private/...` paths do not resolve from `/home/kevin/cron`.
+- **Gotchas**:
+  - Copying only the top-level `run` file fails because it invokes sibling stage directories and `lib/common.sh`.
+  - Cron has a minimal environment, so the scheduled command uses an absolute path and explicit `PATH`; credentials remain outside the crontab.
+- **Test Coverage Areas**:
+  - Verified launcher path resolution and documented the required complete tree, runtime files, and host-side MariaDB endpoint.
+
+## Task: Port CricketArchive Maintenance Scripts to Beta VPS
+- **Date/Time Completed**: 2026-09-23 16:36
+- **What Was Shipped**:
+  - Replaced laptop-only paths, `sudo`/macOS commands, embedded database passwords, and hard-coded mail credentials in `ca_scripts/` with shared external configuration and secret-file loading.
+  - Added portable launchers for the fetch, parse, update, database, and dump stages plus committed example configuration and runner documentation.
+  - Added a loopback-only Beta MariaDB host mapping on port `3307` so host-side Java JDBC clients can reach Docker MariaDB without public database exposure.
+- **Key Decisions**:
+  - Host-side runners use `jdbc:mariadb://127.0.0.1:3307/cricketarchive`; Dockerized applications continue to use the service DNS name `mariadb:3306`.
+  - Runtime values belong in ignored `ca_scripts/config.env` and `ca_scripts/credentials.env`; Beta database credentials are read from the existing `private/beta/jdbc.*` secret files.
+- **Gotchas**:
+  - `mariadb` is not resolvable from a JVM running on the VPS host; it is only a Docker-network name.
+  - Existing credentials embedded in the former laptop launchers should be rotated independently because they may remain in repository history.
+- **Test Coverage Areas**:
+  - Shell syntax, Compose rendering, source-control secret scans, and a host-to-container MariaDB connection check are required after deployment.
+
+## Task: Verify Beta IdentityServer Registration Email Deployment
+- **Date/Time Completed**: 2026-09-23 07:26
+- **What Was Shipped**:
+  - Scrubbed the Beta deployment guide so it no longer contains a real SMTP username or app password; examples now use placeholders only.
+  - Added checks for the four mounted `MailKit__*` files, recent `ids` email logs, provider Sent mail, recipient spam filtering, and the public confirmation URL.
+  - Added a troubleshooting entry distinguishing SMTP delivery failures from messages accepted by SMTP but filtered by the provider or mailbox.
+- **Key Decisions**:
+  - Kept the current Beta Compose deployment unchanged: `ids` already mounts all four `MailKit__*` files through Docker secrets and loads them through KeyPerFile configuration.
+  - Treat a successful SMTP send followed by a valid `https://ids-beta.knowledgespike.cricket/ConfirmEmail` link as evidence that deployment is correct; investigate mailbox filtering separately.
+- **Gotchas**:
+  - Updating files under `private/beta/` does not update an already-running container; recreate `ids` after changing SMTP values.
+  - A container can be healthy while email delivery is broken if SMTP credentials are invalid or still use generated `changeme-*` placeholders.
+- **Test Coverage Areas**:
+  - A live registration test produced the confirmation email and a valid public confirmation link; following the link marked the user as email-confirmed.
+  - Documentation validation should check `git diff --check`; real SMTP credentials must never be recorded in source or project memory.
+
+## Task: Document Beta IdentityServer MailKit Secrets
+- **Date/Time Completed**: 2026-09-22 18:09
+- **What Was Shipped**:
+  - Updated the Beta deployment guide, README, private-secret guidance, and migration notes for the four `MailKit__*` files mounted by the `ids` service.
+  - Documented the SMTP placeholder replacement workflow, provider app-password requirement, and `ids` recreation command after credential changes.
+  - Aligned migration DNS examples with canonical `stats-beta` and `stats-api-beta` hostnames while retaining legacy Nginx aliases.
+- **Key Decisions**:
+  - Kept `scripts/generate-beta-secrets.sh` as the source of generated MailKit files; it already creates the four names with safe placeholders and reminds operators to replace them.
+  - Kept MailKit documentation Beta-specific because `local-vm` Compose does not mount those secrets.
+- **Gotchas**:
+  - Leaving `changeme-smtp-username` or `changeme-smtp-password` in `private/beta/` can make IdentityServer email delivery fail even though the container starts.
+- **Test Coverage Areas**:
+  - Shell syntax validation for the existing Beta secret generator and documentation whitespace validation.
+
 ## Task: Diagnose Beta ACS Frontpage 502
 - **Date/Time Completed**: 2026-09-22 17:03
 - **What Was Shipped**:

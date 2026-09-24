@@ -1,0 +1,10 @@
+#!/bin/sh
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/../lib/common.sh"
+ca_init "$SCRIPT_DIR"
+ca_require_archive
+cd "$SCRIPT_DIR" || exit 1
+
+./bin/sa-parsecard -o -bd "$CA_ARCHIVE_DIR" -scd Scorecards.nightly -jd json.nightly
+exec ./bin/sa-parsecard -o -bd "$CA_ARCHIVE_DIR" -scd Scorecards.nightly -jd json

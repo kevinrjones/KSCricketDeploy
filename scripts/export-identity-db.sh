@@ -26,7 +26,12 @@ BASELINE_SCHEMA="$PROJECT_ROOT/mariadb/baseline/schema.ddl"
 DB_HOST="${DB_HOST:-127.0.0.1}"
 DB_PORT="${DB_PORT:-3306}"
 DB_USER="${DB_USER:-root}"
-DB_PASS="${DB_PASS:-p4ssw0rd}"
+DB_PASS="${DB_PASS:-}"
+
+if [[ -z "$DB_PASS" ]]; then
+    echo "ERROR: DB_PASS must be supplied through the environment or a secret file."
+    exit 1
+fi
 
 echo "=========================================="
 echo "Exporting clean Identity baseline"

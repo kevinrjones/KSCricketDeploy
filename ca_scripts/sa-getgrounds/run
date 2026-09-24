@@ -1,0 +1,17 @@
+#!/bin/sh
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+. "$SCRIPT_DIR/../lib/common.sh"
+ca_init "$SCRIPT_DIR"
+ca_require_archive
+cd "$SCRIPT_DIR" || exit 1
+
+if [ -n "${CRICKETARCHIVE_PROXY_HOST:-}" ] && [ -n "${CRICKETARCHIVE_PROXY_PORT:-}" ]; then
+    if [ -n "${CRICKETARCHIVE_PROXY_USER:-}" ]; then
+        exec ./bin/sa-getgrounds -bd "$CA_ARCHIVE_DIR" -f grounds.json -n grounds.nightly.json -ph "$CRICKETARCHIVE_PROXY_HOST" -pp "$CRICKETARCHIVE_PROXY_PORT" -pu "$CRICKETARCHIVE_PROXY_USER"
+    else
+        exec ./bin/sa-getgrounds -bd "$CA_ARCHIVE_DIR" -f grounds.json -n grounds.nightly.json -ph "$CRICKETARCHIVE_PROXY_HOST" -pp "$CRICKETARCHIVE_PROXY_PORT"
+    fi
+else
+    exec ./bin/sa-getgrounds -bd "$CA_ARCHIVE_DIR" -f grounds.json -n grounds.nightly.json
+fi

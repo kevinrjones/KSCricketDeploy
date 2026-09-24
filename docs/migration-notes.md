@@ -62,6 +62,12 @@ echo -n "actual_value" > private/beta/ConnectionStrings__identity
 
 See `private/.secret-names` for the full list of required secrets.
 
+For the Beta Compose deployment, also migrate the four IdentityServer SMTP
+files: `MailKit__SmtpServer`, `MailKit__Port`, `MailKit__Username`, and
+`MailKit__Password`. The Beta `ids` service mounts these files directly; replace
+the generated `changeme-*` values with the SMTP provider settings before
+starting the service. Use an SMTP app password when the provider requires one.
+
 ### 5. Set Up TLS Certificates
 
 ```bash
@@ -77,10 +83,13 @@ chmod 600 certs/beta/server.key
 Create A records in Cloudflare pointing to the **VPS public IP** (not a laptop VM private IP):
 - `ids-beta.knowledgespike.cricket`
 - `adminui-beta.knowledgespike.cricket`
-- `web-beta.knowledgespike.cricket`
-- `api-beta.knowledgespike.cricket`
+- `stats-beta.knowledgespike.cricket`
+- `stats-api-beta.knowledgespike.cricket`
 - `bbb-beta.knowledgespike.cricket`
 - `bbb-api-beta.knowledgespike.cricket`
+
+The older `web-beta` and `api-beta` names remain Nginx aliases for backward
+compatibility, but `stats-*` are the canonical Beta ACS hostnames.
 
 Set proxy to **orange cloud** (proxied). For local-vm name resolution, see the main README (**hosts file** or **Cloudflare Tunnel** — never A records to `192.168.x.x`).
 
@@ -96,9 +105,9 @@ cd environments/beta
 If migrating to a new host or starting with an empty MariaDB volume, seed the `cricketarchive` and `acs_ball_by_ball` databases:
 
 ```bash
-# On the beta host:
-./scripts/import-cricket-data.sh /path/to/cricketarchive-upload.sql.gz beta
-./scripts/import-ball-by-ball-data.sh /path/to/ball-by-ball-upload.sql.gz beta
+# On the beta host, with dumps stored in ~/sql:
+./scripts/import-cricket-data.sh ~/sql/cricketarchive-upload.sql.gz beta
+./scripts/import-ball-by-ball-data.sh ~/sql/ball-by-ball-upload.sql.gz beta
 
 # Or streamed from laptop over SSH:
 ./scripts/import-cricket-data.sh ~/Dropbox/dumps/mysql/cricketarchive-upload.sql.gz beta --remote root@<vps-ip>

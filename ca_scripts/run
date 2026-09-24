@@ -1,0 +1,51 @@
+#!/bin/sh
+
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/lib/common.sh"
+ca_init "$SCRIPT_DIR" "$SCRIPT_DIR"
+ca_require_archive
+ca_require_fetch_credentials
+ca_require_db_credentials
+
+if [ -n "${CRICKETARCHIVE_PROXY_HOST:-}" ] && [ -z "${CRICKETARCHIVE_PROXY_PORT:-}" ]; then
+    printf '%s\n' 'ERROR: CRICKETARCHIVE_PROXY_PORT is required with CRICKETARCHIVE_PROXY_HOST.' >&2
+    exit 1
+fi
+
+if [ -z "${CRICKETARCHIVE_PROXY_HOST:-}" ] && [ -n "${CRICKETARCHIVE_PROXY_PORT:-}" ]; then
+    printf '%s\n' 'ERROR: CRICKETARCHIVE_PROXY_HOST is required with CRICKETARCHIVE_PROXY_PORT.' >&2
+    exit 1
+fi
+ca_run sa-getgrounds
+ca_run sa-getcards-nightly
+ca_run sa-parsecard
+ca_run sa-parseplayer
+ca_run sa-update-players
+ca_run sa-update-officials
+ca_run sa-database
+
+mkdir -p "$CA_DUMP_DIR"
+log_file="$SCRIPT_DIR/db.log"
+printf 'Dumping database file at: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$log_file"
+if ! command -v mariadb-dump >/dev/null 2>&1 && ! command -v mysqldump >/dev/null 2>&1; then
+    printf '%s\n' 'ERROR: mariadb-dump or mysqldump is required to create the export.' >&2
+    exit 1
+fi
+
+dump_command=$(command -v mariadb-dump || command -v mysqldump)
+dump_tmp="$CA_DUMP_FILE.tmp"
+trap 'rm -f "$dump_tmp"' EXIT HUP INT TERM
+if ! MYSQL_PWD="$CA_DB_PASSWORD" "$dump_command" \
+    --host="$CA_DB_HOST" --port="$CA_DB_PORT" --user="$CA_DB_USER" \
+    --verbose "$CA_DB_NAME" > "$dump_tmp" 2>>"$log_file"; then
+    printf 'ERROR: database export failed; see %s\n' "$log_file" >&2
+    exit 1
+fi
+if ! gzip -c "$dump_tmp" > "$CA_DUMP_FILE"; then
+    printf 'ERROR: could not compress database export: %s\n' "$CA_DUMP_FILE" >&2
+    exit 1
+fi
+rm -f "$dump_tmp"
+trap - EXIT HUP INT TERM
+printf 'Finished dumping database file at: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$log_file"

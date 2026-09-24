@@ -76,6 +76,10 @@ JDBC_PW="${JDBC_PW:-$(rand)}"
 
 ADMINUI_CLIENT_SECRET="${ADMINUI_CLIENT_SECRET:-$(rand)}"
 USERNAME_POLICY_SECRET="${USERNAME_POLICY_SECRET:-$(rand)}"
+MAILKIT_SMTP_SERVER="${MAILKIT_SMTP_SERVER:-smtp.gmail.com}"
+MAILKIT_SMTP_PORT="${MAILKIT_SMTP_PORT:-587}"
+MAILKIT_SMTP_USERNAME="${MAILKIT_SMTP_USERNAME:-changeme-smtp-username}"
+MAILKIT_SMTP_PASSWORD="${MAILKIT_SMTP_PASSWORD:-changeme-smtp-password}"
 
 # Connection string used by IdS + AdminUI (host = compose service name)
 CONN="server=mariadb;database=${DB_NAME};user=${DB_USER};password=${APP_PW};Command Timeout=180"
@@ -94,6 +98,10 @@ printf 'write IdentityServerConnectionString\n'
 write_secret DataProtection__Certificate__Password "$DP_PW"
 write_secret AdminUIClientSecret "$ADMINUI_CLIENT_SECRET"
 write_secret UsernamePolicy__Secret "$USERNAME_POLICY_SECRET"
+write_secret MailKit__SmtpServer "$MAILKIT_SMTP_SERVER"
+write_secret MailKit__Port "$MAILKIT_SMTP_PORT"
+write_secret MailKit__Username "$MAILKIT_SMTP_USERNAME"
+write_secret MailKit__Password "$MAILKIT_SMTP_PASSWORD"
 write_secret jdbc.username "$JDBC_USER"
 write_secret jdbc.password "$JDBC_PW"
 
@@ -141,8 +149,9 @@ Remember:
   1. Replace LicenseKey and Google client files with real values (or disable Google in a custom image if unused).
   2. Put the same STATS OIDC client secret in environments/beta/.env as STATS_OIDC_CLIENT_SECRET.
   3. Put the same BBB OIDC client secret in environments/beta/.env as BBB_OIDC_CLIENT_SECRET.
-  4. MariaDB will automatically create identity, cricketarchive, acs_ball_by_ball, and cricket databases on first startup using mariadb/init/01-init-databases.sh.
-  5. Secrets and certs must remain readable by container users (chmod 644 private/beta/* certs/beta/ids-mysql-dp.pfx).
+  4. Replace MailKit__SmtpServer, MailKit__Port, MailKit__Username, and MailKit__Password with the SMTP settings used by IdS.
+  5. MariaDB will automatically create identity, cricketarchive, acs_ball_by_ball, and cricket databases on first startup using mariadb/init/01-init-databases.sh.
+  6. Secrets and certs must remain readable by container users (chmod 644 private/beta/* certs/beta/ids-mysql-dp.pfx).
 
 Generated app DB password is in private/beta/mariadb_password (also embedded in connection strings).
 EOF

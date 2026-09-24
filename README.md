@@ -43,7 +43,9 @@ Your laptop hosts file (or optional Cloudflare Tunnel)
     → same services as beta
 ```
 
-All services share one Docker network. nginx routes by `Host` header. Only ports 80 and 443 are exposed on the host.
+All services share one Docker network. nginx routes by `Host` header. Ports 80
+and 443 are publicly exposed; Beta additionally binds MariaDB to loopback port
+3307 for host-side maintenance runners.
 
 > **Important:** A local VM without a public IP cannot be the target of Cloudflare A/AAAA records (proxied or DNS-only). Cloudflare’s edge must reach a **public** origin. See [DNS and local VM](#dns-and-local-vm).
 
@@ -81,6 +83,10 @@ All services share one Docker network. nginx routes by `Host` header. Only ports
 │   ├── generate-local-vm-certs.sh      # Private CA + nginx cert for *-vm hostnames
 │   ├── generate-local-vm-secrets.sh    # DB/OIDC-related secret files + DP PFX for local-vm
 │   └── generate-beta-secrets.sh        # DB/OIDC-related secret files + DP PFX for beta
+├── ca_scripts/                         # CricketArchive fetch/update runners
+│   ├── README.md                       # Laptop and VPS setup
+│   ├── config.env.example              # Non-secret runtime configuration
+│   └── credentials.env.example         # Empty credential template
 ├── private/                # Per-env secret *files* (gitignored bodies; see private/README.md)
 │   ├── .secret-names       # Cheatsheet only (not loaded by Compose)
 │   ├── README.md
@@ -132,11 +138,13 @@ Images are tagged with:
 | Store | Path                       | Holds                                                                                                                       |
 |-------|----------------------------|-----------------------------------------------------------------------------------------------------------------------------|
 | Env   | `environments/<env>/.env`  | Image tags, hostnames, `MARIADB_DATABASE` / `MARIADB_USER`, `STATS_OIDC_CLIENT_*`, `BBB_OIDC_CLIENT_*`                      |
-| Files | `private/<env>/<filename>` | Passwords, connection strings, AdminUI license, Google OAuth — **one value per file**, mounted at `/run/secrets/<filename>` |
+| Files | `private/<env>/<filename>` | Passwords, connection strings, AdminUI license, Google OAuth, and Beta IdS SMTP settings — **one value per file**, mounted at `/run/secrets/<filename>` |
 
 - `private/.secret-names` is a **cheatsheet only** (Compose does not load it).
 - `private/README.md` summarises the model.
 - Full local-vm walkthrough: **[docs/local-vm-deploy.md](docs/local-vm-deploy.md)**.
+- Full Beta walkthrough: **[docs/beta-deploy.md](docs/beta-deploy.md)**.
+- CricketArchive fetch/update runners: **[ca_scripts/README.md](ca_scripts/README.md)**.
 
 ### Required secret files (local-vm)
 
@@ -151,6 +159,27 @@ Images are tagged with:
 | `jdbc.username`, `jdbc.password`                                           | acs-api, bbb-api                                   |
 
 ACS Web and BBB Web client secrets are **`STATS_OIDC_CLIENT_SECRET` and `BBB_OIDC_CLIENT_SECRET` in `.env`**, not secret files.
+
+### Additional required secret files (beta)
+
+The Beta `ids` service mounts these SMTP settings in addition to the common
+files above:
+
+| File under `private/beta/` | Used by |
+|---|---|
+| `MailKit__SmtpServer`, `MailKit__Port` | ids |
+| `MailKit__Username`, `MailKit__Password` | ids |
+
+Generate the complete Beta set with:
+
+```bash
+./scripts/generate-beta-secrets.sh
+# Replace MailKit__* placeholders, LicenseKey, and Google OAuth files.
+```
+
+The generator creates `smtp.gmail.com`, port `587`, and `changeme-*`
+placeholders by default; replace all four values with the SMTP provider
+settings before deploying Beta.
 
 ### How to set secrets (local-vm)
 
@@ -231,11 +260,13 @@ The Identity database contains users, roles, claims, clients, and API resources.
 - Defaults: source `identity-dev`, output `mariadb/init/identity-baseline.sql.template`.
 - Dumps users, roles, claims, client definitions, and resources while stripping ephemeral keys (`DataProtectionKeys`, `Keys`, `PersistedGrants`, `AuditEntries`).
 - Replaces machine-specific URLs and client secrets with environment template placeholders (`{{IDS_URL}}`, `{{WEB_URL}}`, `{{ADMINUI_SECRET_HASH}}`, etc.).
-- To run that script against the docker version of mariadb running on this machine (which should be the canonical version) then:
-``` bash
-DB_PORT=3307 DB_USER=identity DB_PASS=1db21bdfbe84b1163e81050faf40f85db17a8de0dd9b363a \
+- To run that script against the Docker MariaDB version on this machine (which should be the canonical version), supply the password outside the command history:
+```bash
+read -r -s -p 'MariaDB password: ' DB_PASS; printf '\n'
+DB_PORT=3307 DB_USER=identity DB_PASS="$DB_PASS" \
   ./scripts/export-identity-db.sh identity mariadb/init/identity-baseline.sql.template
-  ```
+unset DB_PASS
+```
 
 ### 2. Automatic Clean VM Installation
 

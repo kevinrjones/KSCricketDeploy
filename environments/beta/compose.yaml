@@ -30,6 +30,10 @@ services:
       ACS_API_HOSTNAME: ${ACS_API_HOSTNAME:-stats-api-beta.knowledgespike.cricket}
       BBB_WEB_HOSTNAME: ${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}
       BBB_API_HOSTNAME: ${BBB_API_HOSTNAME:-bbb-api-beta.knowledgespike.cricket}
+    # Allow host-side data maintenance runners to reach MariaDB without
+    # exposing it beyond loopback. Containers continue to use mariadb:3306.
+    ports:
+      - "127.0.0.1:${MARIADB_HOST_PORT:-3307}:3306"
     secrets:
       - mariadb_root_password
       - mariadb_password
@@ -66,6 +70,10 @@ services:
       - DataProtection__Certificate__Password
       - Authentication__Google__ClientId
       - Authentication__Google__ClientSecret
+      - MailKit__SmtpServer
+      - MailKit__Port
+      - MailKit__Username
+      - MailKit__Password
     volumes:
       - beta-ids-logs:/app/logs
       - ../../certs/beta/ids-mysql-dp.pfx:/run/certs/ids-mysql-dp.pfx:ro
@@ -311,6 +319,14 @@ secrets:
     file: ../../private/beta/Authentication__Google__ClientId
   Authentication__Google__ClientSecret:
     file: ../../private/beta/Authentication__Google__ClientSecret
+  MailKit__SmtpServer:
+    file: ../../private/beta/MailKit__SmtpServer
+  MailKit__Port:
+    file: ../../private/beta/MailKit__Port
+  MailKit__Username:
+    file: ../../private/beta/MailKit__Username
+  MailKit__Password:
+    file: ../../private/beta/MailKit__Password
 
   LicenseKey:
     file: ../../private/beta/LicenseKey
