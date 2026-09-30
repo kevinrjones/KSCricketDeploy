@@ -220,12 +220,14 @@ The `.env` file defines image tags, hostnames, and database settings.
    STATS_OIDC_CLIENT_SECRET=change-me-to-the-identity-client-secret
    BBB_OIDC_CLIENT_ID=ballbyball
    BBB_OIDC_CLIENT_SECRET=change-me-to-the-identity-client-secret
+   # Optional override; Compose derives this from IDS_HOSTNAME when omitted.
+   # OIDC_REGISTRATION_URL=https://ids-vm.knowledgespike.cricket/identity/account/register
    KTOR_ENVIRONMENT=beta
 
    TZ=UTC
    ```
 
-4. Set `STATS_OIDC_CLIENT_SECRET` and `BBB_OIDC_CLIENT_SECRET` to the client secrets configured in IdentityServer. Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`).
+4. Set `STATS_OIDC_CLIENT_SECRET` and `BBB_OIDC_CLIENT_SECRET` to the client secrets configured in IdentityServer. Leave `OIDC_REGISTRATION_URL` commented unless the public registration page is not at the default IdentityServer path. Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`).
 
 ---
 
@@ -426,6 +428,7 @@ curl -fsS -o /dev/null https://bbb-vm.knowledgespike.cricket/ && echo "BBB Web O
    - Click login. It will redirect to `ids-vm.knowledgespike.cricket` for authentication, and return back to `web-vm.knowledgespike.cricket/signin-oidc`.
 4. Open **`https://bbb-vm.knowledgespike.cricket`**:
    - Click login. It will redirect to `ids-vm.knowledgespike.cricket` for authentication, and return back to `bbb-vm.knowledgespike.cricket/signin-oidc`.
+   - Click sign up. It should redirect to `https://ids-vm.knowledgespike.cricket/identity/account/register` (or the configured `OIDC_REGISTRATION_URL`).
 
 ---
 

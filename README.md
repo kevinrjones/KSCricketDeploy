@@ -137,7 +137,7 @@ Images are tagged with:
 
 | Store | Path                       | Holds                                                                                                                       |
 |-------|----------------------------|-----------------------------------------------------------------------------------------------------------------------------|
-| Env   | `environments/<env>/.env`  | Image tags, hostnames, `MARIADB_DATABASE` / `MARIADB_USER`, `STATS_OIDC_CLIENT_*`, `BBB_OIDC_CLIENT_*`                      |
+| Env   | `environments/<env>/.env`  | Image tags, hostnames, `MARIADB_DATABASE` / `MARIADB_USER`, `STATS_OIDC_CLIENT_*`, `BBB_OIDC_CLIENT_*`, optional `OIDC_REGISTRATION_URL` |
 | Files | `private/<env>/<filename>` | Passwords, connection strings, AdminUI license, Google OAuth, and Beta IdS SMTP settings — **one value per file**, mounted at `/run/secrets/<filename>` |
 
 - `private/.secret-names` is a **cheatsheet only** (Compose does not load it).
@@ -159,6 +159,12 @@ Images are tagged with:
 | `jdbc.username`, `jdbc.password`                                           | acs-api, bbb-api                                   |
 
 ACS Web and BBB Web client secrets are **`STATS_OIDC_CLIENT_SECRET` and `BBB_OIDC_CLIENT_SECRET` in `.env`**, not secret files.
+
+`bbb-web` uses `OIDC_REGISTRATION_URL` for its `/bff/signup` redirect. Compose
+derives the default from `IDS_HOSTNAME` as
+`https://<IDS_HOSTNAME>/identity/account/register`; set the variable only when
+IdentityServer uses a different public registration path or hostname. Recreate
+`bbb-web` after changing it.
 
 ### Additional required secret files (beta)
 
@@ -186,6 +192,7 @@ settings before deploying Beta.
 ```bash
 cp .env.example environments/local-vm/.env
 # edit image tags, hostnames, STATS_OIDC_CLIENT_SECRET, BBB_OIDC_CLIENT_SECRET
+# optionally uncomment OIDC_REGISTRATION_URL for a non-standard signup URL
 
 ./scripts/generate-local-vm-secrets.sh
 # then replace LicenseKey + Google files with real values

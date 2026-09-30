@@ -245,12 +245,14 @@ The `.env` file defines image tags, hostnames, and database settings for the Bet
    STATS_OIDC_CLIENT_SECRET=change-me-to-the-identity-client-secret
    BBB_OIDC_CLIENT_ID=ballbyball
    BBB_OIDC_CLIENT_SECRET=change-me-to-the-identity-client-secret
+   # Optional override; Compose derives this from IDS_HOSTNAME when omitted.
+   # OIDC_REGISTRATION_URL=https://ids-beta.knowledgespike.cricket/identity/account/register
    KTOR_ENVIRONMENT=beta
 
    TZ=UTC
    ```
 
-3. Set `STATS_OIDC_CLIENT_SECRET` and `BBB_OIDC_CLIENT_SECRET` to the client secrets configured in IdentityServer. Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`).
+3. Set `STATS_OIDC_CLIENT_SECRET` and `BBB_OIDC_CLIENT_SECRET` to the client secrets configured in IdentityServer. Leave `OIDC_REGISTRATION_URL` commented unless the public registration page is not at the default IdentityServer path. Save and exit (`Ctrl+O`, `Enter`, `Ctrl+X`).
 
 ---
 
@@ -601,6 +603,7 @@ whereas the ACS API and BBB API checks print their heartbeat JSON.
    - Click login. You should be redirected to `ids-beta.knowledgespike.cricket` for authentication, and return back to `stats-beta.knowledgespike.cricket/signin-oidc`.
 4. Open **`https://bbb-beta.knowledgespike.cricket`**:
    - Click login. You should be redirected to `ids-beta.knowledgespike.cricket` for authentication, and return back to `bbb-beta.knowledgespike.cricket/signin-oidc`.
+   - Click sign up. You should be redirected to `https://ids-beta.knowledgespike.cricket/identity/account/register` (or the configured `OIDC_REGISTRATION_URL`).
 
 ---
 
@@ -825,6 +828,7 @@ The deploy script pulls newer image layers and recreates updated containers with
 | **BBB API: Socket fail to connect to localhost (`Connection refused`)** | Container missing `DB_JDBC_URL` environment variable | Ensure `DB_JDBC_URL: jdbc:mariadb://mariadb:3306/acs_ball_by_ball` is present in `environments/beta/compose.yaml` under `bbb-api`. |
 | **BBB API: 502 Bad Gateway / Connection refused from upstream** | `API_HOST: 0.0.0.0` missing; Ktor binds strictly to `localhost` inside container | Ensure `API_HOST: 0.0.0.0` is present in `compose.yaml` under `bbb-api` and restart: `docker compose up -d --force-recreate bbb-api`. |
 | **BBB Web / IdS: unauthorized_client on login** | `ClientRedirectUris` in IdentityServer lacks `https://bbb-beta.knowledgespike.cricket/signin-oidc` | Re-seed identity database: `./scripts/import-identity-db.sh beta`, or run SQL: `INSERT INTO identity.ClientRedirectUris (ClientId, RedirectUri) SELECT Id, 'https://bbb-beta.knowledgespike.cricket/signin-oidc' FROM identity.Clients WHERE ClientId = 'ballbyball';`. |
+| **BBB Web sign-up redirects to `ids.local` or the wrong page** | `bbb-web` is using its application default because the deployment did not provide the public registration URL | Set `OIDC_REGISTRATION_URL` in the environment `.env` when overriding the default, then recreate `bbb-web`: `docker compose --env-file environments/beta/.env -f environments/beta/compose.yaml up -d --force-recreate bbb-web`. |
 | **OIDC Login: Redirect URI mismatch** | Client redirect URI in Identity does not match `https://stats-beta...` | Log into AdminUI and verify that the `acsstats` client has `https://stats-beta.knowledgespike.cricket/signin-oidc` registered as an allowed redirect URI. |
 
 

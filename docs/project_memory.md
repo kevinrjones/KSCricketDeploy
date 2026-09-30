@@ -1,5 +1,19 @@
 # Project Memory
 
+## Task: Wire BBB Registration URL into Deployment
+- **Date/Time Completed**: 2026-09-24 13:20
+- **What Was Shipped**:
+  - Passed `OIDC_REGISTRATION_URL` into `bbb-web` in both Beta and local-VM Compose configurations.
+  - Derived the default from each environment's `IDS_HOSTNAME` and documented an optional override for custom public registration paths.
+  - Added signup verification and troubleshooting guidance to the README and deployment guides.
+- **Key Decisions**:
+  - Keep the value as public runtime configuration; it does not belong in secret files, identity database seeding, or secret-generation scripts.
+  - Use `/identity/account/register` on the public IdentityServer hostname so `/bff/signup` never falls back to the application's `ids.local` development default in deployment.
+- **Gotchas**:
+  - Changes to the environment value require recreating `bbb-web` because application configuration is loaded at process startup.
+- **Test Coverage Areas**:
+  - Compose rendering must confirm both environments expose the expected `OIDC_REGISTRATION_URL` to `bbb-web`; Markdown and shell syntax checks should pass.
+
 ## Task: Configure Log Rotation for VPS Cron Logs
 - **Date/Time Completed**: 2026-09-24 10:14
 - **What Was Shipped**:

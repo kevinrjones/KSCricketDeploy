@@ -199,6 +199,8 @@ services:
       OIDC_CLIENT_SECRET: ${BBB_OIDC_CLIENT_SECRET:?Set BBB_OIDC_CLIENT_SECRET in environments/beta/.env}
       OIDC_REDIRECT_URI: https://${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}/signin-oidc
       OIDC_POST_LOGOUT_REDIRECT_URI: https://${BBB_WEB_HOSTNAME:-bbb-beta.knowledgespike.cricket}/
+      # Public IdentityServer page used by the BBB Web /bff/signup redirect.
+      OIDC_REGISTRATION_URL: ${OIDC_REGISTRATION_URL:-https://${IDS_HOSTNAME:-ids-beta.knowledgespike.cricket}/identity/account/register}
       # Server-side API calls stay on the Docker network (HTTP).
       API_BASE_URL: http://bbb-api:5004
       OIDC_CERT_PATH: /etc/ssl/certs/origin-ca.pem

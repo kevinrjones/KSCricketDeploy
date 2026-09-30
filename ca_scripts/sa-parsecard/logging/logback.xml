@@ -31,7 +31,7 @@
         <password>${GMAIL_ACCT_PASSWORD}</password>
         <to>kevin@knowledgespike.com</to>
         <from>kev.r.jones@gmail.com</from>
-        <subject>Parse Cards from Laptop: %logger{20} - %msg</subject>
+        <subject>Parse Cards from beta: %logger{20} - %msg</subject>
         <layout class="ch.qos.logback.classic.html.HTMLLayout"/>
     </appender>
     <root level="INFO">

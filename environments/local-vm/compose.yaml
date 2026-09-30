@@ -190,6 +190,8 @@ services:
       OIDC_CLIENT_SECRET: ${BBB_OIDC_CLIENT_SECRET:?Set BBB_OIDC_CLIENT_SECRET in environments/local-vm/.env}
       OIDC_REDIRECT_URI: https://${BBB_WEB_HOSTNAME:-bbb-vm.knowledgespike.cricket}/signin-oidc
       OIDC_POST_LOGOUT_REDIRECT_URI: https://${BBB_WEB_HOSTNAME:-bbb-vm.knowledgespike.cricket}/
+      # Public IdentityServer page used by the BBB Web /bff/signup redirect.
+      OIDC_REGISTRATION_URL: ${OIDC_REGISTRATION_URL:-https://${IDS_HOSTNAME:-ids-vm.knowledgespike.cricket}/identity/account/register}
       API_BASE_URL: https://${BBB_API_HOSTNAME:-bbb-api-vm.knowledgespike.cricket}
       KTOR_ENVIRONMENT: ${KTOR_ENVIRONMENT:-beta}
     volumes:
