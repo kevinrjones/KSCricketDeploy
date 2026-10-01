@@ -21,6 +21,7 @@ ca_init() {
     fi
 
     CA_ARCHIVE_DIR=${CA_ARCHIVE_DIR:-$HOME/CricketArchive/Archive}
+    CA_CRICSHEET_DIR=${CA_CRICSHEET_DIR:-$HOME/Cricsheets/rawdata}
     CA_DB_HOST=${CA_DB_HOST:-127.0.0.1}
     CA_DB_PORT=${CA_DB_PORT:-3306}
     CA_DB_NAME=${CA_DB_NAME:-cricketarchive}
@@ -37,7 +38,7 @@ ca_init() {
     CA_DB_USER=${CA_DB_USER:-cricketarchive}
     CA_JDBC_URL=${CA_JDBC_URL:-jdbc:mariadb://$CA_DB_HOST:$CA_DB_PORT/$CA_DB_NAME}
 
-    export CA_ROOT CA_COMPONENT_DIR CA_ARCHIVE_DIR CA_DB_HOST CA_DB_PORT
+    export CA_ROOT CA_COMPONENT_DIR CA_ARCHIVE_DIR CA_CRICSHEET_DIR CA_DB_HOST CA_DB_PORT
     export CA_DB_NAME CA_DB_USER CA_JDBC_URL CA_DUMP_DIR CA_DUMP_FILE
     export CRICKETARCHIVE_EMAIL CRICKETARCHIVE_PASSWORD
     export CRICKETARCHIVE_PROXY_HOST CRICKETARCHIVE_PROXY_PORT
@@ -56,6 +57,14 @@ ca_require_archive() {
     if [ ! -d "$CA_ARCHIVE_DIR" ]; then
         printf 'ERROR: CricketArchive directory does not exist: %s\n' "$CA_ARCHIVE_DIR" >&2
         printf 'Set CA_ARCHIVE_DIR in %s.\n' "${CA_CONFIG_FILE:-$CA_ROOT/config.env}" >&2
+        exit 1
+    fi
+}
+
+ca_require_cricsheet_dir() {
+    if [ ! -d "$CA_CRICSHEET_DIR" ]; then
+        printf 'ERROR: Cricsheets directory does not exist: %s\n' "$CA_CRICSHEET_DIR" >&2
+        printf 'Set CA_CRICSHEET_DIR in %s.\n' "${CA_CONFIG_FILE:-$CA_ROOT/config.env}" >&2
         exit 1
     fi
 }
