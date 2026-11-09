@@ -4,6 +4,12 @@
 # =============================================================================
 # Usage: ./scripts/deploy.sh [environment]
 #   environment: beta or local-vm (defaults to the parent directory name)
+#
+# NOTE: 'deploy.sh local-vm' is for running inside a virtual machine ONLY.
+# To run the images on the host machine, cd to:
+#   /Users/kevinjones/Dropbox/projects/cricket/KSCricket/deploy/docker
+# and run:
+#   docker compose up -d --build
 # =============================================================================
 
 set -euo pipefail
@@ -20,6 +26,18 @@ if [ ! -f "$ENV_DIR/compose.yaml" ]; then
     echo "Available environments:"
     ls -1 "$PROJECT_ROOT/environments/" 2>/dev/null || echo "  (none)"
     exit 1
+fi
+
+# Pre-flight check: validate DataProtection certificate password if present
+DP_PFX="$PROJECT_ROOT/certs/$ENV/ids-mysql-dp.pfx"
+DP_PW_FILE="$PROJECT_ROOT/private/$ENV/DataProtection__Certificate__Password"
+if [ -f "$DP_PFX" ] && [ -f "$DP_PW_FILE" ]; then
+    if ! openssl pkcs12 -info -in "$DP_PFX" -passin "file:$DP_PW_FILE" -noout >/dev/null 2>&1; then
+        echo "ERROR: Data Protection certificate ($DP_PFX) cannot be read with the password in $DP_PW_FILE."
+        echo "The certificate password in $DP_PW_FILE is out of sync with the certificate."
+        echo "To fix this, run: ./scripts/generate-${ENV}-secrets.sh"
+        exit 1
+    fi
 fi
 
 echo "=========================================="

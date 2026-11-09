@@ -22,19 +22,21 @@ Compose mounts each file to `/run/secrets/<filename>` (see `environments/*/compo
 ## Required files (local-vm / beta)
 
 See the environment-specific secret tables in `README.md` and the deployment
-guides. Generate local VM placeholders with:
+guides. Generate local VM secrets with:
 
 ```bash
 ./scripts/generate-local-vm-secrets.sh
 ```
 
-Generate Beta placeholders with:
+Generate Beta secrets with:
 
 ```bash
 ./scripts/generate-beta-secrets.sh
 ```
 
-For Beta email delivery, replace the generated `MailKit__SmtpServer`,
+These scripts read any overrides from `environments/<env>/.env` (if defined) or generate random secure values. They populate the individual files in `private/<env>/` and generate the Data Protection certificate in `certs/<env>/ids-mysql-dp.pfx`.
+
+For Beta email delivery, configure `MAILKIT_SMTP_*` in `environments/beta/.env` or replace the generated `MailKit__SmtpServer`,
 `MailKit__Port`, `MailKit__Username`, and `MailKit__Password` files with the
 SMTP settings used by the IdentityServer deployment. These files are mounted
 by the Beta `ids` service; the `MailKit__Password` file should contain the
@@ -43,4 +45,6 @@ provider's app password where the SMTP account requires one, not a
 
 ## Never commit
 
-Real passwords, licenses, Google secrets, or connection strings. Placeholders may say `changeme`.
+All secret files under `private/local-vm/` and `private/beta/` (except `.gitkeep`), `.env` files, and `certs/` are ignored by git.
+Never commit real passwords, licenses, Google secrets, or connection strings to source control.
+Refer to `AGENTS.md` for troubleshooting password and authentication issues.

@@ -1,5 +1,33 @@
 # Project Memory
 
+## Task: Clarify Local-VM Deployment Target and Host Machine Running Instructions
+- **Date/Time Completed**: 2026-11-09 10:15
+- **What Was Shipped**:
+  - Updated `README.md`, `docs/local-vm-deploy.md`, `AGENTS.md`, and `scripts/deploy.sh` to explicitly specify that `deploy.sh local-vm` and `environments/local-vm/` are for Linux virtual machines ONLY.
+  - Documented that running container images directly on the host machine requires navigating to `/Users/kevinjones/Dropbox/projects/cricket/KSCricket/deploy/docker` and running `docker compose up -d --build`.
+- **Key Decisions**:
+  - Prominently place environment target notices in Quick Start, deployment scripts, agent guidelines, and step-by-step documentation to prevent confusion between host machine and virtual machine deployments.
+- **Gotchas**:
+  - Attempting to run `deploy.sh local-vm` directly on the host machine without VM networking and local CA setup causes routing and certificate mismatch errors.
+- **Test Coverage Areas**:
+  - Markdown documentation formatting and shell script comments validated.
+
+## Task: Untrack Secret Files, Enable .env Overrides, and Add Agent Guide (AGENTS.md)
+- **Date/Time Completed**: 2026-11-09 09:55
+- **What Was Shipped**:
+  - Removed all tracked secret files under `private/local-vm/`, `private/beta/`, and `background_scripts/credentials.env` from Git tracking (`git rm --cached`) and verified `.gitignore` excludes them.
+  - Added support in `./scripts/generate-local-vm-secrets.sh` and `./scripts/generate-beta-secrets.sh` to read password and secret overrides from `environments/<env>/.env` or environment variables before falling back to automatic random generation.
+  - Updated `.env.example` with commented optional override parameters.
+  - Created `AGENTS.md` at the project root documenting secret architecture, git rules, root causes of container/database password errors, and step-by-step diagnostic workflows for AI agents.
+  - Updated `README.md`, `private/README.md`, `docs/local-vm-deploy.md`, and `docs/beta-deploy.md` with links and troubleshooting instructions.
+- **Key Decisions**:
+  - Keep Compose secret mount paths pointing to `private/<env>/<filename>` for compatibility with ASP.NET Core `KeyPerFile` and MariaDB password files, while sourcing any user-defined values from `.env` via the secret generation scripts.
+  - Exclude all real secret files from version control while preserving directory structure via `.gitkeep`.
+- **Gotchas**:
+  - MariaDB only initializes users and databases on an empty volume; regenerating secrets while a data volume exists leads to authentication errors unless credentials are synchronized in-place or the volume is reset.
+- **Test Coverage Areas**:
+  - Verified `git status` shows no untracked secret files and confirmed `generate-local-vm-secrets.sh` and `generate-beta-secrets.sh` execute cleanly.
+
 ## Task: Wire BBB Registration URL into Deployment
 - **Date/Time Completed**: 2026-09-24 13:20
 - **What Was Shipped**:

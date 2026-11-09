@@ -4,9 +4,10 @@
 
 ## Quick Start
 
-**Laptop local VM (hosts file + private CA):** follow the full walkthrough → **[docs/local-vm-deploy.md](docs/local-vm-deploy.md)**.
-
-**Beta / VPS (Cloudflare + public IP):** follow the full walkthrough → **[docs/beta-deploy.md](docs/beta-deploy.md)**.
+> **Host Machine vs. Virtual Machine:**
+> - **Virtual Machine ONLY:** `./scripts/deploy.sh local-vm` (and `environments/local-vm`) is for a **virtual machine ONLY**. Follow the full walkthrough → **[docs/local-vm-deploy.md](docs/local-vm-deploy.md)**.
+> - **Host Machine:** To run the images on the host machine, `cd` to `/Users/kevinjones/Dropbox/projects/cricket/KSCricket/deploy/docker` and run `docker compose up -d --build`.
+> - **Beta / VPS (Cloudflare + public IP):** follow the full walkthrough → **[docs/beta-deploy.md](docs/beta-deploy.md)**.
 
 **Short form (Beta):**
 
@@ -53,6 +54,7 @@ and 443 are publicly exposed; Beta additionally binds MariaDB to loopback port
 
 ```
 ├── README.md               # This file
+├── AGENTS.md               # Agent instructions & troubleshooting guide (passwords, containers)
 ├── .gitignore
 ├── .env.example            # Template for environment variables
 ├── environments/
@@ -83,7 +85,7 @@ and 443 are publicly exposed; Beta additionally binds MariaDB to loopback port
 │   ├── generate-local-vm-certs.sh      # Private CA + nginx cert for *-vm hostnames
 │   ├── generate-local-vm-secrets.sh    # DB/OIDC-related secret files + DP PFX for local-vm
 │   └── generate-beta-secrets.sh        # DB/OIDC-related secret files + DP PFX for beta
-├── ca_scripts/                         # CricketArchive fetch/update runners
+├── background_scripts/                 # CricketArchive fetch/update runners
 │   ├── README.md                       # Laptop and VPS setup
 │   ├── config.env.example              # Non-secret runtime configuration
 │   └── credentials.env.example         # Empty credential template
@@ -142,9 +144,10 @@ Images are tagged with:
 
 - `private/.secret-names` is a **cheatsheet only** (Compose does not load it).
 - `private/README.md` summarises the model.
+- Troubleshooting container and password errors: **[AGENTS.md](AGENTS.md)**.
 - Full local-vm walkthrough: **[docs/local-vm-deploy.md](docs/local-vm-deploy.md)**.
 - Full Beta walkthrough: **[docs/beta-deploy.md](docs/beta-deploy.md)**.
-- CricketArchive fetch/update runners: **[ca_scripts/README.md](ca_scripts/README.md)**.
+- CricketArchive fetch/update runners: **[background_scripts/README.md](background_scripts/README.md)**.
 
 ### Required secret files (local-vm)
 
@@ -230,12 +233,14 @@ If you later use **Cloudflare Tunnel**, TLS is often terminated at Cloudflare; f
 
 ## Deploy Script
 
+> **Important:** `./scripts/deploy.sh local-vm` is for a **virtual machine ONLY**. To run the images on the host machine, `cd` to `/Users/kevinjones/Dropbox/projects/cricket/KSCricket/deploy/docker` and run `docker compose up -d --build`.
+
 ```bash
-# Deploy beta environment
+# Deploy beta environment (on remote VPS)
 cd environments/beta
 ../../scripts/deploy.sh
 
-# Deploy local-vm environment
+# Deploy local-vm environment (on Linux virtual machine ONLY)
 cd environments/local-vm
 ../../scripts/deploy.sh
 ```
@@ -392,6 +397,8 @@ the `stats-*` names are the canonical Beta ACS URLs used by the deployment
 guide and OIDC configuration.
 
 ### Local VM (default: hosts file)
+
+> **Target Note:** The `local-vm` environment and `./scripts/deploy.sh local-vm` are for a **virtual machine ONLY**. To run the images on the host machine, `cd` to `/Users/kevinjones/Dropbox/projects/cricket/KSCricket/deploy/docker` and run `docker compose up -d --build`.
 
 **Full steps (VM setup, Docker, secrets, OpenSSL/CA, hosts, trust store, verify):** see **[docs/local-vm-deploy.md](docs/local-vm-deploy.md)**.
 
