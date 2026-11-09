@@ -382,6 +382,21 @@ Because Beta runs behind Cloudflare with **Full (strict)** SSL/TLS mode, Nginx r
 
 ## Step 7: Deploy the Application Stack
 
+### Step 7.0: Create and configure host log directories
+
+The Beta deployment maps container application logs directly to host directories under `/var/logs/<service>` via bind mounts (`/var/logs/ids`, `/var/logs/adminui`, `/var/logs/acs-web`, `/var/logs/acs-api`, `/var/logs/bbb-web`, `/var/logs/bbb-api`).
+
+To allow unprivileged users (such as your SFTP login account) to inspect and download log files without requiring `sudo`:
+
+```bash
+# Create log directories on the host
+sudo mkdir -p /var/logs/{ids,adminui,acs-web,acs-api,bbb-web,bbb-api}
+
+# Grant read/write/traverse access to your deployment user / SFTP user
+sudo chown -R $USER:$USER /var/logs/{ids,adminui,acs-web,acs-api,bbb-web,bbb-api}
+sudo chmod -R 775 /var/logs/{ids,adminui,acs-web,acs-api,bbb-web,bbb-api}
+```
+
 On your **Beta VPS**, start the stack:
 
 1. Run the deployment script:
@@ -754,7 +769,7 @@ chmod +x scripts/import-identity-db.sh
 
 ### View live logs
 
-On the VPS:
+On the VPS via Docker Compose:
 ```bash
 cd ~/acs-deploy/environments/beta
 
@@ -767,6 +782,17 @@ docker compose --env-file .env logs -f bbb-api
 docker compose --env-file .env logs -f bbb-web
 docker compose --env-file .env logs -f nginx
 docker compose --env-file .env logs -f mariadb
+```
+
+### Inspect or SFTP log files directly
+
+Container application logs are written to host directories under `/var/logs/<service>/`. You can view or download them via SFTP or shell without `sudo`:
+
+```bash
+# View log files on the host
+ls -la /var/logs/ids/
+tail -f /var/logs/acs-web/*.log
+tail -f /var/logs/ids/*.log
 ```
 
 ### Restart a single service

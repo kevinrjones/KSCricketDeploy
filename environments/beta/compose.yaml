@@ -76,7 +76,7 @@ services:
       - MailKit__Username
       - MailKit__Password
     volumes:
-      - beta-ids-logs:/app/logs
+      - /var/log/ids:/app/logs
       - ../../certs/beta/ids-mysql-dp.pfx:/run/certs/ids-mysql-dp.pfx:ro
     networks:
       - acs-net
@@ -108,7 +108,7 @@ services:
       - IdentityConnectionString
       - IdentityServerConnectionString
     volumes:
-      - beta-adminui-logs:/app/logs
+      - /var/log/adminui:/app/logs
     networks:
       - acs-net
     depends_on:
@@ -144,7 +144,7 @@ services:
       OIDC_CERT_PATH: /etc/ssl/certs/origin-ca.pem
       KTOR_ENVIRONMENT: beta
     volumes:
-      - beta-acs-web-logs:/opt/app/logs
+      - /var/log/acs-web:/opt/app/logs
       - ../../certs/beta/origin-ca.pem:/etc/ssl/certs/origin-ca.pem:ro
     networks:
       - acs-net
@@ -176,7 +176,7 @@ services:
       - jdbc.username
       - jdbc.password
     volumes:
-      - beta-acs-api-logs:/opt/app/logs
+      - /var/log/acs-api:/opt/app/logs
     networks:
       - acs-net
     depends_on:
@@ -207,7 +207,7 @@ services:
       OIDC_CERT_PATH: /etc/ssl/certs/origin-ca.pem
       KTOR_ENVIRONMENT: beta
     volumes:
-      - beta-bbb-web-logs:/opt/app/logs
+      - /var/log/bbb-web:/opt/app/logs
       - ../../certs/beta/origin-ca.pem:/etc/ssl/certs/origin-ca.pem:ro
     networks:
       - acs-net
@@ -251,7 +251,7 @@ services:
       - jdbc.username
       - jdbc.password
     volumes:
-      - beta-bbb-api-logs:/opt/app/logs
+      - /var/log/bbb-api:/opt/app/logs
     networks:
       - acs-net
     depends_on:
@@ -295,18 +295,6 @@ networks:
 volumes:
   beta-mariadb-data:
     name: beta-mariadb-data
-  beta-ids-logs:
-    name: beta-ids-logs
-  beta-adminui-logs:
-    name: beta-adminui-logs
-  beta-acs-web-logs:
-    name: beta-acs-web-logs
-  beta-acs-api-logs:
-    name: beta-acs-api-logs
-  beta-bbb-web-logs:
-    name: beta-bbb-web-logs
-  beta-bbb-api-logs:
-    name: beta-bbb-api-logs
 
 # Each secret file's *basename* is the name inside /run/secrets/
 secrets:

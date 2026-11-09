@@ -1,6 +1,8 @@
 # Environment files with secrets
 .env
 environments/**/.env
+credentials.env
+**/credentials.env
 
 # Secrets — keep README / cheatsheet; ignore real per-env secret file bodies
 private/.secrets

@@ -1,5 +1,33 @@
 # Project Memory
 
+## Task: Purge background_scripts/credentials.env from Git History and Ignore
+- **Date/Time Completed**: 2026-11-09 14:15
+- **What Was Shipped**:
+  - Purged all historical commits and references to `background_scripts/credentials.env` from Git history using `git-filter-repo`.
+  - Added global and explicit `.gitignore` rules for `credentials.env` and `**/credentials.env`.
+  - Restored the remote configuration and verified zero occurrences across all commit trees and logs.
+- **Key Decisions**:
+  - Use `git-filter-repo --path background_scripts/credentials.env --invert-paths` to completely remove all historical commits containing the sensitive file.
+  - Add wildcard and path-specific `.gitignore` patterns to prevent future accidental check-ins.
+- **Gotchas**:
+  - `git-filter-repo` automatically drops the `origin` remote as a safety precaution; re-added `origin` remote after history rewrite.
+- **Test Coverage Areas**:
+  - Verified with `git log --all --full-history` and `git check-ignore` that no references to `credentials.env` exist in history or index.
+
+## Task: Implement Host Bind Mounts for Beta Container Logs (/var/logs)
+- **Date/Time Completed**: 2026-11-09 11:45
+- **What Was Shipped**:
+  - Replaced Docker named log volumes in `environments/beta/compose.yaml` with host directory bind mounts under `/var/logs/<service>` (`/var/logs/ids`, `/var/logs/adminui`, `/var/logs/acs-web`, `/var/logs/acs-api`, `/var/logs/bbb-web`, `/var/logs/bbb-api`).
+  - Removed unused named log volumes from the top-level `volumes:` section in `environments/beta/compose.yaml`.
+  - Updated `docs/beta-deploy.md` with instructions on creating host log directories with unprivileged permissions for direct SFTP/shell access without requiring `sudo`.
+- **Key Decisions**:
+  - Use `/var/logs/<service>` host bind mounts so logs can be browsed and downloaded directly via SFTP without elevated root permissions.
+  - Leave database data storage on Docker named volume (`beta-mariadb-data`).
+- **Gotchas**:
+  - Ensure `/var/logs/<service>` directories exist with appropriate ownership (`chown -R $USER:$USER /var/logs/...` and `chmod -R 775`) on the Beta host before or after first startup so non-root SFTP accounts can read them.
+- **Test Coverage Areas**:
+  - Validated Compose file syntax with `docker compose config` and checked documentation formatting with `git diff --check`.
+
 ## Task: Clarify Local-VM Deployment Target and Host Machine Running Instructions
 - **Date/Time Completed**: 2026-11-09 10:15
 - **What Was Shipped**:
